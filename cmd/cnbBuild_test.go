@@ -397,6 +397,7 @@ func TestRunCnbBuild(t *testing.T) {
 		commonPipelineEnvironment := cnbBuildCommonPipelineEnvironment{}
 		registry := "some-registry"
 		config := cnbBuildOptions{
+			BuildTool:            "maven",
 			ContainerImageName:   "my-image",
 			ContainerImageTag:    "3.1.5",
 			ContainerRegistryURL: registry,
@@ -441,6 +442,7 @@ uri = "some-buildpack"`))
 		assert.Equal(t, "folder", string(customData.Path))
 		assert.Contains(t, customData.AdditionalTags, "latest")
 		assert.Equal(t, "paketobuildpacks/builder:full", customData.Builder)
+		assert.Equal(t, "maven", customData.BuildTool)
 		assert.Contains(t, customData.BindingKeys, "SECRET")
 
 		assert.Contains(t, customData.Buildpacks.FromConfig, "paketobuildpacks/java")
