@@ -61,6 +61,10 @@ func createParameterOverview(stepData *config.StepData, executionEnvironment boo
 	table += "| ---- | --------- | ---------------------- |\n"
 
 	for _, param := range stepData.Spec.Inputs.Parameters {
+		if param.Hidden {
+			continue
+		}
+
 		furtherInfo, err := parameterFurtherInfo(param.Name, stepData, executionEnvironment)
 		if err == nil {
 
