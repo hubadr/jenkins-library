@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/SAP/jenkins-library/pkg/cnbutils"
+	piperconf "github.com/SAP/jenkins-library/pkg/config"
 	piperhttp "github.com/SAP/jenkins-library/pkg/http"
 	"github.com/SAP/jenkins-library/pkg/mock"
 	"github.com/SAP/jenkins-library/pkg/telemetry"
@@ -37,7 +38,7 @@ func assertLifecycleCalls(t *testing.T, runner *mock.ExecMockRunner) {
 }
 
 func TestRunCnbBuild(t *testing.T) {
-	t.Parallel()
+	configOptions.openFile = piperconf.OpenPiperFile
 
 	t.Run("prefers direct configuration", func(t *testing.T) {
 		t.Parallel()
@@ -435,10 +436,11 @@ uri = "some-buildpack"`))
 		err = json.Unmarshal([]byte(customDataAsString), &customData)
 
 		assert.NoError(t, err)
-		assert.Equal(t, 1, customData.Version)
+		assert.Equal(t, 2, customData.Version)
 		assert.Equal(t, "3.1.5", customData.ImageTag)
 		assert.Equal(t, "folder", string(customData.Path))
 		assert.Contains(t, customData.AdditionalTags, "latest")
+		assert.Equal(t, "paketobuildpacks/builder:full", customData.Builder)
 		assert.Contains(t, customData.BindingKeys, "SECRET")
 
 		assert.Contains(t, customData.Buildpacks.FromConfig, "paketobuildpacks/java")

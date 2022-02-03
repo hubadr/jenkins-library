@@ -53,6 +53,8 @@ type cnbBuildTelemetryData struct {
 	BuildEnv          cnbBuildTelemetryDataBuildEnv          `json:"buildEnv"`
 	Buildpacks        cnbBuildTelemetryDataBuildpacks        `json:"buildpacks"`
 	ProjectDescriptor cnbBuildTelemetryDataProjectDescriptor `json:"projectDescriptor"`
+	Builder           string                                 `json:"builder"`
+	BuildTool         string                                 `json:"buildTool"`
 }
 
 type cnbBuildTelemetryDataBuildEnv struct {
@@ -335,6 +337,13 @@ func addConfigTelemetryData(utils cnbutils.BuildUtils, data *cnbBuildTelemetryDa
 	data.BuildEnv.KeysOverall = overallKeys
 
 	data.Buildpacks.FromConfig = privacy.FilterBuildpacks(config.Buildpacks)
+
+	dockerImage, err := getDockerImageValue("cnbBuild")
+	if err != nil {
+		data.Builder = ""
+	} else {
+		data.Builder = privacy.FilterBuilder(dockerImage)
+	}
 }
 
 func addProjectDescriptorTelemetryData(data *cnbBuildTelemetryData, descriptor project.Descriptor) {
@@ -357,7 +366,7 @@ func addProjectDescriptorTelemetryData(data *cnbBuildTelemetryData, descriptor p
 func runCnbBuild(config *cnbBuildOptions, telemetryData *telemetry.CustomData, utils cnbutils.BuildUtils, commonPipelineEnvironment *cnbBuildCommonPipelineEnvironment, httpClient piperhttp.Sender) error {
 	var err error
 
-	customTelemetryData := cnbBuildTelemetryData{Version: 1}
+	customTelemetryData := cnbBuildTelemetryData{Version: 2}
 	addConfigTelemetryData(utils, &customTelemetryData, config)
 
 	err = isBuilder(utils)
