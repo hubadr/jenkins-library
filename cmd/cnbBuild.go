@@ -340,9 +340,19 @@ func addConfigTelemetryData(utils cnbutils.BuildUtils, data *cnbBuildTelemetryDa
 
 	dockerImage, err := getDockerImageValue("cnbBuild")
 	if err != nil {
+		log.Entry().Warnf("Retrieving docker image failed: '%v'", err)
 		data.Builder = ""
 	} else {
 		data.Builder = privacy.FilterBuilder(dockerImage)
+	}
+
+	buildTool, err := getBuildTool("cnbBuild")
+	if err != nil {
+		log.Entry().Warnf("Retrieving buildTool failed: '%v'", err)
+		data.BuildTool = ""
+	} else {
+		log.Entry().Infof("Retrieving buildTool: '%s'", buildTool)
+		data.BuildTool = buildTool
 	}
 }
 
