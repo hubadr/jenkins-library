@@ -34,6 +34,15 @@ spec:
           ```
         type: jenkins
     params:
+      - name: buildTool
+        type: string
+        description: Defines the tool which is used for building the artifact.
+        scope:
+          - GENERAL
+          - PARAMETERS
+          - STAGES
+          - STEPS
+        hidden: true
       - name: containerImageName
         aliases:
           - name: dockerImageName

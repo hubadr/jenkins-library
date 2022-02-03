@@ -346,14 +346,8 @@ func addConfigTelemetryData(utils cnbutils.BuildUtils, data *cnbBuildTelemetryDa
 		data.Builder = privacy.FilterBuilder(dockerImage)
 	}
 
-	buildTool, err := getBuildTool("cnbBuild")
-	if err != nil {
-		log.Entry().Warnf("Retrieving buildTool failed: '%v'", err)
-		data.BuildTool = ""
-	} else {
-		log.Entry().Infof("Retrieving buildTool: '%s'", buildTool)
-		data.BuildTool = buildTool
-	}
+	data.BuildTool = config.BuildTool
+	log.Entry().Infof("Retrieving buildTool: '%s'", config.BuildTool)
 }
 
 func addProjectDescriptorTelemetryData(data *cnbBuildTelemetryData, descriptor project.Descriptor) {
