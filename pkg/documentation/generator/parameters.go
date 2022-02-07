@@ -61,10 +61,6 @@ func createParameterOverview(stepData *config.StepData, executionEnvironment boo
 	table += "| ---- | --------- | ---------------------- |\n"
 
 	for _, param := range stepData.Spec.Inputs.Parameters {
-		if param.Hidden {
-			continue
-		}
-
 		furtherInfo, err := parameterFurtherInfo(param.Name, stepData, executionEnvironment)
 		if err == nil {
 
@@ -146,9 +142,6 @@ func createParameterDetails(stepData *config.StepData) string {
 	//jenkinsParameters := append(jenkinsParameters(stepData), "script")
 
 	for _, param := range stepData.Spec.Inputs.Parameters {
-		if param.Hidden {
-			continue
-		}
 		details += fmt.Sprintf("#### %v\n\n", param.Name)
 
 		if !contains(stepParameterNames, param.Name) {

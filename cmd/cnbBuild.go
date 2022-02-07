@@ -54,7 +54,6 @@ type cnbBuildTelemetryData struct {
 	Buildpacks        cnbBuildTelemetryDataBuildpacks        `json:"buildpacks"`
 	ProjectDescriptor cnbBuildTelemetryDataProjectDescriptor `json:"projectDescriptor"`
 	Builder           string                                 `json:"builder"`
-	BuildTool         string                                 `json:"buildTool"`
 }
 
 type cnbBuildTelemetryDataBuildEnv struct {
@@ -345,9 +344,6 @@ func addConfigTelemetryData(utils cnbutils.BuildUtils, data *cnbBuildTelemetryDa
 	} else {
 		data.Builder = privacy.FilterBuilder(dockerImage)
 	}
-
-	data.BuildTool = config.BuildTool
-	log.Entry().Infof("Retrieving buildTool: '%s'", config.BuildTool)
 }
 
 func addProjectDescriptorTelemetryData(data *cnbBuildTelemetryData, descriptor project.Descriptor) {

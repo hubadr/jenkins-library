@@ -18,7 +18,6 @@ import (
 )
 
 type cnbBuildOptions struct {
-	BuildTool                 string                 `json:"buildTool,omitempty"`
 	ContainerImageName        string                 `json:"containerImageName,omitempty"`
 	ContainerImageTag         string                 `json:"containerImageTag,omitempty"`
 	ContainerRegistryURL      string                 `json:"containerRegistryUrl,omitempty"`
@@ -155,7 +154,6 @@ func CnbBuildCommand() *cobra.Command {
 }
 
 func addCnbBuildFlags(cmd *cobra.Command, stepConfig *cnbBuildOptions) {
-	cmd.Flags().StringVar(&stepConfig.BuildTool, "buildTool", os.Getenv("PIPER_buildTool"), "Defines the tool which is used for building the artifact.")
 	cmd.Flags().StringVar(&stepConfig.ContainerImageName, "containerImageName", os.Getenv("PIPER_containerImageName"), "Name of the container which will be built\n`cnbBuild` step will try to identify a containerImageName using the following precedence:\n  1. `containerImageName` parameter.\n  2. `project.id` field of a `project.toml` file.\n  3. `git/repository` parameter of the `commonPipelineEnvironment`.\nIf none of the above was found - an error will be raised.\n")
 	cmd.Flags().StringVar(&stepConfig.ContainerImageTag, "containerImageTag", os.Getenv("PIPER_containerImageTag"), "Tag of the container which will be built")
 	cmd.Flags().StringVar(&stepConfig.ContainerRegistryURL, "containerRegistryUrl", os.Getenv("PIPER_containerRegistryUrl"), "Container registry where the image should be pushed to")
@@ -185,15 +183,6 @@ func cnbBuildMetadata() config.StepData {
 					{Name: "dockerConfigJsonCredentialsId", Description: "Jenkins 'Secret file' credentials ID containing Docker config.json (with registry credential(s)) in the following format:\n\n```json\n{\n    \"auths\": {\n            \"$server\": {\n                    \"auth\": \"base64($username + ':' + $password)\"\n            }\n    }\n}\n```\n\nExample:\n\n```json\n{\n    \"auths\": {\n            \"example.com\": {\n                    \"auth\": \"dXNlcm5hbWU6cGFzc3dvcmQ=\"\n            }\n    }\n}\n```\n", Type: "jenkins"},
 				},
 				Parameters: []config.StepParameters{
-					{
-						Name:        "buildTool",
-						ResourceRef: []config.ResourceReference{},
-						Scope:       []string{"GENERAL", "PARAMETERS", "STAGES", "STEPS"},
-						Type:        "string",
-						Mandatory:   false,
-						Aliases:     []config.Alias{},
-						Default:     os.Getenv("PIPER_buildTool"),
-					},
 					{
 						Name:        "containerImageName",
 						ResourceRef: []config.ResourceReference{},

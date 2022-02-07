@@ -58,7 +58,6 @@ type StepParameters struct {
 	Conditions      []Condition           `json:"conditions,omitempty"`
 	Secret          bool                  `json:"secret,omitempty"`
 	MandatoryIf     []ParameterDependence `json:"mandatoryIf,omitempty"`
-	Hidden          bool                  `json:"hidden,omitempty"`
 }
 
 type ParameterDependence struct {
