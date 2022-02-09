@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,12 +18,12 @@ import (
 )
 
 type configCommandOptions struct {
-	output                        string //output format, so far only JSON
-	outputFile                    string //if set: path to file where the output should be written to
-	parametersJSON                string //parameters to be considered in JSON format
+	output                        string // output format, so far only JSON
+	outputFile                    string // if set: path to file where the output should be written to
+	parametersJSON                string // parameters to be considered in JSON format
 	stageConfig                   bool
 	stageConfigAcceptedParameters []string
-	stepMetadata                  string //metadata to be considered, can be filePath or ENV containing JSON in format 'ENV:MY_ENV_VAR'
+	stepMetadata                  string // metadata to be considered, can be filePath or ENV containing JSON in format 'ENV:MY_ENV_VAR'
 	stepName                      string
 	contextConfig                 bool
 	openFile                      func(s string, t map[string]string) (io.ReadCloser, error)
@@ -102,7 +103,7 @@ func getConfig() (config.StepConfig, error) {
 
 		customConfig, err := configOptions.openFile(projectConfigFile, GeneralConfig.GitHubAccessTokens)
 		if err != nil {
-			if !os.IsNotExist(err) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				return stepConfig, errors.Wrapf(err, "config: open configuration file '%v' failed", projectConfigFile)
 			}
 			customConfig = nil
@@ -150,7 +151,7 @@ func getConfig() (config.StepConfig, error) {
 
 		customConfig, err := configOptions.openFile(projectConfigFile, GeneralConfig.GitHubAccessTokens)
 		if err != nil {
-			if !os.IsNotExist(err) {
+			if !errors.Is(err, fs.ErrNotExist) {
 				return stepConfig, errors.Wrapf(err, "config: open configuration file '%v' failed", projectConfigFile)
 			}
 			customConfig = nil
@@ -214,7 +215,7 @@ func generateConfig(utils getConfigUtils) error {
 
 func addConfigFlags(cmd *cobra.Command) {
 
-	//ToDo: support more output options, like https://kubernetes.io/docs/reference/kubectl/overview/#formatting-output
+	// ToDo: support more output options, like https://kubernetes.io/docs/reference/kubectl/overview/#formatting-output
 	cmd.Flags().StringVar(&configOptions.output, "output", "json", "Defines the output format")
 	cmd.Flags().StringVar(&configOptions.outputFile, "outputFile", "", "Defines a file path. f set, the output will be written to the defines file")
 
@@ -235,20 +236,20 @@ func defaultsAndFilters(metadata *config.StepData, stepName string) ([]io.ReadCl
 		}
 		return []io.ReadCloser{defaults}, metadata.GetContextParameterFilters(), nil
 	}
-	//ToDo: retrieve default values from metadata
+	// ToDo: retrieve default values from metadata
 	return []io.ReadCloser{}, metadata.GetParameterFilters(), nil
 }
 
 func applyContextConditions(metadata config.StepData, stepConfig *config.StepConfig) {
-	//consider conditions for context configuration
+	// consider conditions for context configuration
 
-	//containers
+	// containers
 	config.ApplyContainerConditions(metadata.Spec.Containers, stepConfig)
 
-	//sidecars
+	// sidecars
 	config.ApplyContainerConditions(metadata.Spec.Sidecars, stepConfig)
 
-	//ToDo: remove all unnecessary sub maps?
+	// ToDo: remove all unnecessary sub maps?
 	// e.g. extract delete() from applyContainerConditions - loop over all stepConfig.Config[param.Value] and remove ...
 }
 
@@ -262,7 +263,7 @@ func prepareOutputEnvironment(outputResources []config.StepResources, envRootPat
 					paramPath = path.Join(paramPath, paramFields[0]["name"])
 				}
 			}
-			if _, err := os.Stat(filepath.Dir(paramPath)); os.IsNotExist(err) {
+			if _, err := os.Stat(filepath.Dir(paramPath)); errors.Is(err, fs.ErrNotExist) {
 				log.Entry().Debugf("Creating directory: %v", filepath.Dir(paramPath))
 				os.MkdirAll(filepath.Dir(paramPath), 0777)
 			}
@@ -278,7 +279,7 @@ func prepareOutputEnvironment(outputResources []config.StepResources, envRootPat
 	}
 
 	for _, dir := range stepOutputDirectories {
-		if _, err := os.Stat(dir); os.IsNotExist(err) {
+		if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
 			log.Entry().Debugf("Creating directory: %v", dir)
 			os.MkdirAll(dir, 0777)
 		}
