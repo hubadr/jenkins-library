@@ -377,4 +377,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/SAP/jenkins-library/pkg => ../jenkins-library/pkg
+replace github.com/SAP/jenkins-library => ../jenkins-library
