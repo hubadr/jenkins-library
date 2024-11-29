@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -81,19 +82,28 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 		return fmt.Errorf("failed to get project: %s", err)
 	}
 
+	if len(config.ApplicationName) > 0 {
+		cx1sh.App, err = cx1sh.GetApplication() // read application name from piper config (optional) and get ID from CxONE API
+		if err != nil {
+			log.Entry().WithError(err).Warnf("failed to get application %v", config.ApplicationName)
+			if len(config.GroupName) == 0 {
+				return fmt.Errorf("failed to get application %v, please check if the OAuth client/APIKey is assigned to the application", config.ApplicationName)
+			}
+		}
+	}
+
 	if len(config.GroupName) > 0 {
 		cx1sh.Group, err = cx1sh.GetGroup() // used when creating a project and when generating a SARIF report
 		if err != nil {
-			log.Entry().WithError(err).Warnf("failed to get group")
+			log.Entry().WithError(err).Warnf("failed to get group %v", config.GroupName)
+			if len(config.ApplicationName) == 0 {
+				return fmt.Errorf("failed to get group %v, please check if the OAuth client/APIKey is assigned to the group", config.GroupName)
+			}
 		}
 	}
 
 	if cx1sh.Project == nil {
-		cx1sh.App, err = cx1sh.GetApplication() // read application name from piper config (optional) and get ID from CxONE API
-		if err != nil {
-			log.Entry().WithError(err).Warnf("Failed to get application - will attempt to create the project on the Tenant level")
-		}
-		cx1sh.Project, err = cx1sh.CreateProject() // requires groups, repoUrl, mainBranch, origin, tags, criticality
+		cx1sh.Project, err = cx1sh.CreateProject() // requires app or groups, repoUrl, mainBranch, origin, tags, criticality
 		if err != nil {
 			return fmt.Errorf("failed to create project: %s", err)
 		}
@@ -102,11 +112,19 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 		if err != nil {
 			return fmt.Errorf("failed to get project by ID: %s", err)
 		} else {
-			if len(cx1sh.Project.Applications) > 0 {
-				appId := cx1sh.Project.Applications[0]
-				cx1sh.App, err = cx1sh.GetApplicationByID(cx1sh.Project.Applications[0])
-				if err != nil {
-					return fmt.Errorf("failed to retrieve information for project's assigned application %v", appId)
+			if len(cx1sh.Project.Applications) > 0 && len(config.ApplicationName) > 0 {
+				appIdx := -1
+				if cx1sh.App != nil {
+					appIdx = slices.Index(cx1sh.Project.Applications, cx1sh.App.ApplicationID)
+				}
+				if appIdx == -1 {
+					return fmt.Errorf("%v from config does not match any of project's assigned application(s)", config.ApplicationName)
+				} else {
+					appId := cx1sh.Project.Applications[appIdx]
+					cx1sh.App, err = cx1sh.GetApplicationByID(appId)
+					if err != nil {
+						return fmt.Errorf("failed to retrieve information for project's assigned application %v", appId)
+					}
 				}
 			}
 		}
