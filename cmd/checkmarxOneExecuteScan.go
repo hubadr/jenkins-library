@@ -89,7 +89,7 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 	}
 
 	if cx1sh.Project == nil {
-		if len(c.config.ApplicationName) > 0 {
+		if len(config.ApplicationName) > 0 {
 			cx1sh.App, err = cx1sh.GetApplication() // read application name from piper config (optional) and get ID from CxONE API
 			if err != nil {
 				return fmt.Errorf("failed to get application: %v")
