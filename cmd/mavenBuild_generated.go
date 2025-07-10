@@ -88,10 +88,8 @@ func (p *mavenBuildReports) persist(stepConfig mavenBuildOptions, gcpJsonKeyFile
 		{FilePattern: "**/TEST-*.xml", ParamRef: "", StepResultType: "junit"},
 		{FilePattern: "**/jacoco.xml", ParamRef: "", StepResultType: "jacoco-coverage"},
 	}
-	envVars := []gcs.EnvVar{
-		{Name: "GOOGLE_APPLICATION_CREDENTIALS", Value: gcpJsonKeyFilePath, Modified: false},
-	}
-	gcsClient, err := gcs.NewClient(gcs.WithEnvVars(envVars))
+
+	gcsClient, err := gcs.NewClient(gcpJsonKeyFilePath, "")
 	if err != nil {
 		log.Entry().Errorf("creation of GCS client failed: %v", err)
 		return
@@ -132,7 +130,8 @@ func MavenBuildCommand() *cobra.Command {
 It will also prepare jacoco to record the code coverage and
 supports ci friendly versioning by flattening the pom before installing.
 
-### build with depedencies from a private repository
+### build with dependencies from a private repository
+
 if your build has dependencies from a private repository you can include a project settings xml into the source code repository as below (replace the ` + "`" + `<url>` + "`" + `
 tag with a valid private repo url).
 ` + "`" + `` + "`" + `` + "`" + `xml
@@ -422,7 +421,7 @@ func mavenBuildMetadata() config.StepData {
 							{
 								Name:    "altDeploymentRepositoryPasswordFileVaultSecretName",
 								Type:    "vaultSecretFile",
-								Default: "alt-deployment-repository-passowrd",
+								Default: "alt-deployment-repository-password",
 							},
 						},
 						Scope:     []string{"GENERAL", "PARAMETERS", "STAGES", "STEPS"},
@@ -545,7 +544,7 @@ func mavenBuildMetadata() config.StepData {
 				},
 			},
 			Containers: []config.Container{
-				{Name: "mvn", Image: "maven:3.6-jdk-8"},
+				{Name: "mvn", Image: "maven:3.8-jdk-8"},
 			},
 			Outputs: config.StepOutputs{
 				Resources: []config.StepResources{

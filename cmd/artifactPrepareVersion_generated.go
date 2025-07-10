@@ -274,7 +274,7 @@ Define ` + "`" + `buildTool: custom` + "`" + `, ` + "`" + `filePath: <path to yo
 
 func addArtifactPrepareVersionFlags(cmd *cobra.Command, stepConfig *artifactPrepareVersionOptions) {
 	cmd.Flags().StringSliceVar(&stepConfig.AdditionalTargetTools, "additionalTargetTools", []string{}, "Additional buildTool targets where descriptors need to be updated besides the main `buildTool`.")
-	cmd.Flags().StringSliceVar(&stepConfig.AdditionalTargetDescriptors, "additionalTargetDescriptors", []string{}, "Defines patterns for build descriptors which should be used for option [`additionalTargetTools`](additionaltargettools).")
+	cmd.Flags().StringSliceVar(&stepConfig.AdditionalTargetDescriptors, "additionalTargetDescriptors", []string{}, "Defines patterns for build descriptors which should be used for option additionalTargetTools.")
 	cmd.Flags().StringVar(&stepConfig.BuildTool, "buildTool", os.Getenv("PIPER_buildTool"), "Defines the tool which is used for building the artifact.")
 	cmd.Flags().StringVar(&stepConfig.CommitUserName, "commitUserName", `Project Piper`, "Defines the user name which appears in version control for the versioning update (in case `versioningType: cloud`).")
 	cmd.Flags().StringVar(&stepConfig.CustomVersionField, "customVersionField", os.Getenv("PIPER_customVersionField"), "For `buildTool: custom`: Defines the field which contains the version in the descriptor file.")
@@ -565,8 +565,8 @@ func artifactPrepareVersionMetadata() config.StepData {
 				},
 			},
 			Containers: []config.Container{
-				{Image: "maven:3.6-jdk-8", Conditions: []config.Condition{{ConditionRef: "strings-equal", Params: []config.Param{{Name: "buildTool", Value: "maven"}}}}},
-				{Image: "maven:3.6-jdk-8", Conditions: []config.Condition{{ConditionRef: "strings-equal", Params: []config.Param{{Name: "buildTool", Value: "CAP"}}}}},
+				{Image: "maven:3.8.6-jdk-8", Conditions: []config.Condition{{ConditionRef: "strings-equal", Params: []config.Param{{Name: "buildTool", Value: "maven"}}}}},
+				{Image: "maven:3.8.6-jdk-8", Conditions: []config.Condition{{ConditionRef: "strings-equal", Params: []config.Param{{Name: "buildTool", Value: "CAP"}}}}},
 			},
 			Outputs: config.StepOutputs{
 				Resources: []config.StepResources{
