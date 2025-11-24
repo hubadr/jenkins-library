@@ -229,20 +229,6 @@ func runMtaBuild(config mtaBuildOptions, commonPipelineEnvironment *mtaBuildComm
 		return err
 	}
 
-	// Validate SBOM if created
-	if config.CreateBOM {
-		bomPath := filepath.Join(getMtarFileRoot(config), "sbom-gen/bom-mta.xml")
-		log.Entry().Infof("Validating generated SBOM: %s", bomPath)
-
-		if err := piperutils.ValidateCycloneDX14(bomPath); err != nil {
-			log.Entry().Warnf("SBOM validation failed: %v", err)
-		} else {
-			purl := piperutils.GetPurl(bomPath)
-			log.Entry().Infof("SBOM validation passed")
-			log.Entry().Infof("SBOM PURL: %s", purl)
-		}
-	}
-
 	log.Entry().Debugf("creating build settings information...")
 	stepName := "mtaBuild"
 	dockerImage, err := GetDockerImageValue(stepName)
@@ -337,7 +323,7 @@ func handlePublish(config mtaBuildOptions, commonPipelineEnvironment *mtaBuildCo
 }
 
 func buildArtifactsMetadata(config mtaBuildOptions, commonPipelineEnvironment *mtaBuildCommonPipelineEnvironment, mtarPath string) error {
-	mtarDir := filepath.Dir(mtarPath)
+	component := piperutils.GetComponent(filepath.Join(filepath.Dir(mtarPath), "sbom-gen/bom-mta.xml"))
 	buildArtifacts := build.BuildArtifacts{
 		Coordinates: []versioning.Coordinates{
 			{
@@ -347,7 +333,7 @@ func buildArtifactsMetadata(config mtaBuildOptions, commonPipelineEnvironment *m
 				Packaging:  "mtar",
 				BuildPath:  getSourcePath(config),
 				URL:        config.MtaDeploymentRepositoryURL,
-				PURL:       piperutils.GetPurl(filepath.Join(mtarDir, "sbom-gen/bom-mta.xml")),
+				PURL:       component.Purl,
 			},
 		},
 	}
