@@ -1,5 +1,4 @@
 //go:build unit
-// +build unit
 
 package cmd
 
@@ -14,11 +13,11 @@ import (
 
 	"github.com/SAP/jenkins-library/pkg/orchestrator"
 
-	"github.com/ghodss/yaml"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/SAP/jenkins-library/pkg/config"
 	"github.com/SAP/jenkins-library/pkg/log"
@@ -166,13 +165,13 @@ func TestPrepareConfig(t *testing.T) {
 func TestRetrieveHookConfig(t *testing.T) {
 	tt := []struct {
 		hookJSON           []byte
-		expectedHookConfig HookConfiguration
+		expectedHookConfig config.HookConfiguration
 	}{
-		{hookJSON: []byte(""), expectedHookConfig: HookConfiguration{}},
-		{hookJSON: []byte(`{"sentry":{"dsn":"https://my.sentry.dsn"}}`), expectedHookConfig: HookConfiguration{SentryConfig: SentryConfiguration{Dsn: "https://my.sentry.dsn"}}},
+		{hookJSON: []byte(""), expectedHookConfig: config.HookConfiguration{}},
+		{hookJSON: []byte(`{"sentry":{"dsn":"https://my.sentry.dsn"}}`), expectedHookConfig: config.HookConfiguration{SentryConfig: config.SentryConfiguration{Dsn: "https://my.sentry.dsn"}}},
 		{hookJSON: []byte(`{"sentry":{"dsn":"https://my.sentry.dsn"}, "splunk":{"dsn":"https://my.splunk.dsn", "token": "mytoken", "index": "myindex", "sendLogs": true}}`),
-			expectedHookConfig: HookConfiguration{SentryConfig: SentryConfiguration{Dsn: "https://my.sentry.dsn"},
-				SplunkConfig: SplunkConfiguration{
+			expectedHookConfig: config.HookConfiguration{SentryConfig: config.SentryConfiguration{Dsn: "https://my.sentry.dsn"},
+				SplunkConfig: config.SplunkConfiguration{
 					Dsn:      "https://my.splunk.dsn",
 					Token:    "mytoken",
 					Index:    "myindex",
@@ -183,7 +182,7 @@ func TestRetrieveHookConfig(t *testing.T) {
 	}
 
 	for _, test := range tt {
-		var target HookConfiguration
+		var target config.HookConfiguration
 		var hookJSONinterface map[string]interface{}
 		if len(test.hookJSON) > 0 {
 			err := json.Unmarshal(test.hookJSON, &hookJSONinterface)
