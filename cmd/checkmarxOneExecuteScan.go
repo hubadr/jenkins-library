@@ -43,15 +43,17 @@ type checkmarxOneExecuteScanUtils interface {
 }
 
 type checkmarxOneExecuteScanHelper struct {
-	ctx     context.Context
-	config  checkmarxOneExecuteScanOptions
-	sys     checkmarxOne.System
-	influx  *checkmarxOneExecuteScanInflux
-	utils   checkmarxOneExecuteScanUtils
-	Project *checkmarxOne.Project
-	Group   *checkmarxOne.Group
-	App     *checkmarxOne.Application
-	reports []piperutils.Path
+	ctx      context.Context
+	config   checkmarxOneExecuteScanOptions
+	sys      checkmarxOne.System
+	influx   *checkmarxOneExecuteScanInflux
+	utils    checkmarxOneExecuteScanUtils
+	Project  *checkmarxOne.Project
+	Group    *checkmarxOne.Group
+	App      *checkmarxOne.Application
+	ScanSAST bool
+	ScanIAC  bool
+	reports  []piperutils.Path
 }
 
 type checkmarxOneExecuteScanUtilsBundle struct {
@@ -126,7 +128,7 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 		}
 	}
 
-	err = cx1sh.SetProjectPreset()
+	err = cx1sh.SetProjectPresetsAndFilters()
 	if err != nil {
 		return fmt.Errorf("failed to set preset: %s", err)
 	}
@@ -261,7 +263,22 @@ func Authenticate(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExe
 
 	utils := newcheckmarxOneExecuteScanUtilsBundle("./", ghClient)
 
-	return checkmarxOneExecuteScanHelper{ctx, config, sys, influx, utils, nil, nil, nil, []piperutils.Path{}}, nil
+	sastScan := false
+	iacScan := false
+	for _, engine := range config.Engines {
+		if strings.EqualFold(engine, "sast") {
+			sastScan = true
+		}
+		if strings.EqualFold(engine, "iac") {
+			iacScan = true
+		}
+	}
+
+	if !sastScan && !iacScan {
+		return checkmarxOneExecuteScanHelper{}, fmt.Errorf("at least one scan engine must be set in the engines configuration")
+	}
+
+	return checkmarxOneExecuteScanHelper{ctx, config, sys, influx, utils, nil, nil, nil, sastScan, iacScan, []piperutils.Path{}}, nil
 }
 
 func (c *checkmarxOneExecuteScanHelper) GetProjectByName() (*checkmarxOne.Project, error) {
@@ -321,7 +338,7 @@ func (c *checkmarxOneExecuteScanHelper) GetApplicationByID(applicationId string)
 }
 
 func (c *checkmarxOneExecuteScanHelper) CreateProject() (*checkmarxOne.Project, error) {
-	if len(c.config.Preset) == 0 {
+	if len(c.config.SastPreset) == 0 {
 		return nil, fmt.Errorf("Preset is required to create a project")
 	}
 
@@ -346,11 +363,11 @@ func (c *checkmarxOneExecuteScanHelper) CreateProject() (*checkmarxOne.Project, 
 	log.Entry().Infof("Project %v created", project.ProjectID)
 
 	// new project, set the defaults per pipeline config
-	err = c.sys.SetProjectPreset(project.ProjectID, c.config.Preset, true)
+	err = c.sys.SetProjectSASTPreset(project.ProjectID, c.config.SastPreset, true)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to set preset for project %v to %v: %s", project.ProjectID, c.config.Preset, err)
+		return nil, fmt.Errorf("Unable to set preset for project %v to %v: %s", project.ProjectID, c.config.SastPreset, err)
 	}
-	log.Entry().Infof("Project preset updated to %v", c.config.Preset)
+	log.Entry().Infof("Project preset updated to %v", c.config.SastPreset)
 
 	if len(c.config.LanguageMode) != 0 {
 		err = c.sys.SetProjectLanguageMode(project.ProjectID, c.config.LanguageMode, true)
@@ -381,59 +398,157 @@ func (c *checkmarxOneExecuteScanHelper) UpdateProjectTags() error {
 	return nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) SetProjectPreset() error {
+func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 	projectConf, err := c.sys.GetProjectConfiguration(c.Project.ProjectID)
 
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve current project configuration: %s", err)
 	}
 
-	currentPreset := ""
+	currentSASTPreset := ""
+	currentSASTFilter := ""
+	currentIACPreset := ""
+	currentIACFilter := ""
 	currentLanguageMode := "multi" // piper default
 	for _, conf := range projectConf {
-		if conf.Key == "scan.config.sast.presetName" {
-			currentPreset = conf.Value
-		}
-		if conf.Key == "scan.config.sast.languageMode" {
+		switch conf.Key {
+		case "scan.config.sast.presetName":
+			currentSASTPreset = conf.Value
+		case "scan.config.sast.languageMode":
 			currentLanguageMode = conf.Value
+		case "scan.config.sast.filter":
+			currentSASTFilter = conf.Value
+		case "scan.config.kics.filter":
+			currentIACFilter = conf.Value
+		case "scan.config.iac.presetId":
+			iacPresetName, err := c.sys.GetIACPresetNameByID(conf.Value)
+			if err != nil {
+				return err
+			}
+			currentIACPreset = iacPresetName
 		}
+
 	}
 
-	if c.config.LanguageMode == "" || strings.EqualFold(c.config.LanguageMode, "multi") { // default multi if blank
-		if currentLanguageMode != "multi" {
-			log.Entry().Info("Pipeline yaml requests multi-language scan - updating project configuration")
-			c.sys.SetProjectLanguageMode(c.Project.ProjectID, "multi", true)
+	if c.ScanSAST {
+		if c.config.LanguageMode == "" || strings.EqualFold(c.config.LanguageMode, "multi") { // default multi if blank
+			if currentLanguageMode != "multi" {
+				log.Entry().Info("Pipeline yaml requests multi-language scan - updating project configuration")
+				c.sys.SetProjectLanguageMode(c.Project.ProjectID, "multi", true)
 
-			if c.config.Incremental {
-				log.Entry().Warn("Pipeline yaml requests incremental scan, but switching from 'primary' to 'multi' language mode requires a full scan - switching from incremental to full")
-				c.config.Incremental = false
+				if c.config.Incremental {
+					log.Entry().Warn("Pipeline yaml requests incremental scan, but switching from 'primary' to 'multi' language mode requires a full scan - switching from incremental to full")
+					c.config.Incremental = false
+				}
+			}
+		} else { // primary language mode
+			if currentLanguageMode != "primary" {
+				log.Entry().Info("Pipeline yaml requests primary-language scan - updating project configuration")
+				c.sys.SetProjectLanguageMode(c.Project.ProjectID, "primary", true)
+				// no need to switch incremental to full here (multi-language scan includes single-language scan coverage)
 			}
 		}
-	} else { // primary language mode
-		if currentLanguageMode != "primary" {
-			log.Entry().Info("Pipeline yaml requests primary-language scan - updating project configuration")
-			c.sys.SetProjectLanguageMode(c.Project.ProjectID, "primary", true)
-			// no need to switch incremental to full here (multi-language scan includes single-language scan coverage)
+
+		if c.config.SastPreset == "" {
+			if currentSASTPreset == "" {
+				return fmt.Errorf("must specify the SAST preset in either the pipeline yaml or in the CheckmarxOne project configuration")
+			} else {
+				log.Entry().Infof("Pipeline yaml does not specify a SAST preset, will use project configuration (%v).", currentSASTPreset)
+			}
+			c.config.SastPreset = currentSASTPreset
+		} else if currentSASTPreset != c.config.SastPreset {
+			log.Entry().Infof("Project configured SAST preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentSASTPreset, c.config.SastPreset)
+			c.sys.SetProjectSASTPreset(c.Project.ProjectID, c.config.SastPreset, true)
+
+			if c.config.Incremental {
+				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
+				c.config.Incremental = false
+			}
+		} else {
+			log.Entry().Infof("Project is already configured to use pipeline SAST preset %v", currentSASTPreset)
+		}
+
+		if c.config.SastPreset == "" {
+			if currentSASTPreset == "" {
+				return fmt.Errorf("must specify the SAST preset in either the pipeline yaml or in the CheckmarxOne project configuration")
+			} else {
+				log.Entry().Infof("Pipeline yaml does not specify a SAST preset, will use project configuration (%v).", currentSASTPreset)
+			}
+			c.config.SastPreset = currentSASTPreset
+		} else if currentSASTPreset != c.config.SastPreset {
+			log.Entry().Infof("Project configured SAST preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentSASTPreset, c.config.SastPreset)
+			c.sys.SetProjectSASTPreset(c.Project.ProjectID, c.config.SastPreset, true)
+
+			if c.config.Incremental {
+				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
+				c.config.Incremental = false
+			}
+		} else {
+			log.Entry().Infof("Project is already configured to use pipeline SAST preset %v", currentSASTPreset)
+		}
+
+		if c.config.SastFilterPattern == "" {
+			if currentSASTFilter == "" {
+				return fmt.Errorf("must specify the SAST file filter in either the pipeline yaml or in the CheckmarxOne project configuration")
+			} else {
+				log.Entry().Infof("Pipeline yaml does not specify a SAST file filter, will use project configuration (%v).", currentSASTFilter)
+			}
+			c.config.SastFilterPattern = currentSASTFilter
+		} else if currentSASTFilter != c.config.SastFilterPattern {
+			log.Entry().Infof("Project configured SAST file filter (%v) does not match pipeline yaml (%v) - updating project configuration.", currentSASTFilter, c.config.SastFilterPattern)
+			c.sys.SetProjectSASTFileFilter(c.Project.ProjectID, c.config.SastFilterPattern, true)
+
+			if c.config.Incremental {
+				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
+				c.config.Incremental = false
+			}
+		} else {
+			log.Entry().Infof("Project is already configured to use pipeline SAST file filter %v", currentSASTFilter)
 		}
 	}
 
-	if c.config.Preset == "" {
-		if currentPreset == "" {
-			return fmt.Errorf("must specify the preset in either the pipeline yaml or in the CheckmarxOne project configuration")
-		} else {
-			log.Entry().Infof("Pipeline yaml does not specify a preset, will use project configuration (%v).", currentPreset)
-		}
-		c.config.Preset = currentPreset
-	} else if currentPreset != c.config.Preset {
-		log.Entry().Infof("Project configured preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentPreset, c.config.Preset)
-		c.sys.SetProjectPreset(c.Project.ProjectID, c.config.Preset, true)
+	if c.ScanIAC {
+		if c.config.IacPreset == "" {
+			if currentIACPreset == "" {
+				return fmt.Errorf("must specify the IAC preset in either the pipeline yaml or in the CheckmarxOne project configuration")
+			} else {
+				log.Entry().Infof("Pipeline yaml does not specify a IAC preset, will use project configuration (%v).", currentIACPreset)
+			}
+			c.config.IacPreset = currentIACPreset
+		} else if currentIACPreset != c.config.IacPreset {
+			log.Entry().Infof("Project configured IAC preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentIACPreset, c.config.IacPreset)
+			newPresetID, err := c.sys.GetIACPresetIDByName(c.config.IacPreset)
+			if err != nil {
+				return fmt.Errorf("unable to set configured IAC preset '%s': %s", c.config.IacPreset, newPresetID)
+			}
+			c.sys.SetProjectIACPreset(c.Project.ProjectID, newPresetID, true)
 
-		if c.config.Incremental {
-			log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
-			c.config.Incremental = false
+			if c.config.Incremental {
+				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
+				c.config.Incremental = false
+			}
+		} else {
+			log.Entry().Infof("Project is already configured to use pipeline IAC preset %v", currentIACPreset)
 		}
-	} else {
-		log.Entry().Infof("Project is already configured to use pipeline preset %v", currentPreset)
+
+		if c.config.IacFilterPattern == "" {
+			if currentIACFilter == "" {
+				return fmt.Errorf("must specify the IAC file filter in either the pipeline yaml or in the CheckmarxOne project configuration")
+			} else {
+				log.Entry().Infof("Pipeline yaml does not specify a IAC file filter, will use project configuration (%v).", currentIACFilter)
+			}
+			c.config.IacFilterPattern = currentIACFilter
+		} else if currentIACFilter != c.config.IacFilterPattern {
+			log.Entry().Infof("Project configured IAC file filter (%v) does not match pipeline yaml (%v) - updating project configuration.", currentIACFilter, c.config.IacFilterPattern)
+			c.sys.SetProjectIACFileFilter(c.Project.ProjectID, c.config.IacFilterPattern, true)
+
+			if c.config.Incremental {
+				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
+				c.config.Incremental = false
+			}
+		} else {
+			log.Entry().Infof("Project is already configured to use pipeline IAC file filter %v", currentIACFilter)
+		}
 	}
 	return nil
 }
@@ -547,12 +662,12 @@ func (c *checkmarxOneExecuteScanHelper) CreateScanRequest(incremental bool, uplo
 
 	sastConfig.Values = make(map[string]string, 0)
 	sastConfig.Values["incremental"] = strconv.FormatBool(incremental)
-	sastConfig.Values["presetName"] = c.config.Preset // always set, either coming from config or coming from Cx1 configuration
-	if incremental && len(baseBranch) > 0 {           // base the incremental scan on the specified base branch
+	sastConfig.Values["presetName"] = c.config.SastPreset // always set, either coming from config or coming from Cx1 configuration
+	if incremental && len(baseBranch) > 0 {               // base the incremental scan on the specified base branch
 		sastConfig.Values["baseBranch"] = baseBranch
 		sastConfigString = fmt.Sprintf("baseBranch: %v, ", baseBranch)
 	}
-	sastConfigString = fmt.Sprintf("%vincremental %v, preset %v", sastConfigString, strconv.FormatBool(incremental), c.config.Preset)
+	sastConfigString = fmt.Sprintf("%vincremental %v, preset %v", sastConfigString, strconv.FormatBool(incremental), c.config.SastPreset)
 
 	if len(c.config.LanguageMode) > 0 {
 		sastConfig.Values["languageMode"] = c.config.LanguageMode
@@ -1550,7 +1665,8 @@ func (c *checkmarxOneExecuteScanHelper) reportToInflux(results *map[string]inter
 	c.influx.checkmarxOne_data.fields.tool_version = (*results)["ToolVersion"].(string)
 
 	c.influx.checkmarxOne_data.fields.scan_type = (*results)["ScanType"].(string)
-	c.influx.checkmarxOne_data.fields.preset = (*results)["Preset"].(string)
+	c.influx.checkmarxOne_data.fields.sast_preset = (*results)["SastPreset"].(string)
+	c.influx.checkmarxOne_data.fields.iac_preset = (*results)["IacPreset"].(string)
 	c.influx.checkmarxOne_data.fields.deep_link = (*results)["DeepLink"].(string)
 	c.influx.checkmarxOne_data.fields.report_creation_time = (*results)["ReportCreationTime"].(string)
 }

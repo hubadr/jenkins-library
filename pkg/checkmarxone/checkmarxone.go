@@ -323,7 +323,7 @@ type System interface {
 	UploadProjectSourceCode(projectID string, zipFile string) (string, error)
 	CreateProject(projectName string, groupIDs []string) (Project, error)
 	CreateProjectInApplication(projectName, applicationID string, groupIDs []string) (Project, error)
-	GetPresets() ([]Preset, error)
+	//GetPresets() ([]Preset, error)
 	GetProjectByID(projectID string) (Project, error)
 	GetProjectsByName(projectName string) ([]Project, error)
 	GetProjectsByNameAndGroup(projectName, groupID string) ([]Project, error)
@@ -333,10 +333,16 @@ type System interface {
 	GetGroups() ([]Group, error)
 	GetGroupByName(groupName string) (Group, error)
 	GetGroupByID(groupID string) (Group, error)
+
 	SetProjectBranch(projectID, branch string, allowOverride bool) error
-	SetProjectPreset(projectID, presetName string, allowOverride bool) error
 	SetProjectLanguageMode(projectID, languageMode string, allowOverride bool) error
-	SetProjectFileFilter(projectID, filter string, allowOverride bool) error
+	SetProjectSASTPreset(projectID, presetName string, allowOverride bool) error
+	SetProjectSASTFileFilter(projectID, filter string, allowOverride bool) error
+	SetProjectIACPreset(projectID, presetName string, allowOverride bool) error
+	SetProjectIACFileFilter(projectID, filter string, allowOverride bool) error
+
+	GetIACPresetNameByID(presetID string) (string, error)
+	GetIACPresetIDByName(presetName string) (string, error)
 
 	GetProjectConfiguration(projectID string) ([]ProjectConfigurationSetting, error)
 	UpdateProjectConfiguration(projectID string, settings []ProjectConfigurationSetting) error
@@ -1017,6 +1023,7 @@ func (sys *SystemInstance) ScanProject(projectID, sourceUrl, branch, scanType st
 	return Scan{}, errors.New("Invalid scanType provided, must be 'upload' or 'git'")
 }
 
+/*
 func (sys *SystemInstance) GetPresets() ([]Preset, error) {
 	sys.logger.Debug("Getting Presets...")
 	var presets []Preset
@@ -1029,6 +1036,59 @@ func (sys *SystemInstance) GetPresets() ([]Preset, error) {
 
 	err = json.Unmarshal(data, &presets)
 	return presets, err
+}
+*/
+
+func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
+	type IACPreset struct {
+		PresetID string
+		Name     string
+	}
+	var preset_response struct {
+		TotalCount uint64      `json:"totalCount"`
+		Presets    []IACPreset `json:"presets"`
+	}
+
+	params := url.Values{
+		"offset":          {"0"},
+		"limit":           {"1"},
+		"exact-match":     {"true"},
+		"include-details": {"true"},
+		"search-term":     {name},
+	}
+
+	response, err := sendRequest(sys, http.MethodGet, fmt.Sprintf("/preset-manager/iac/presets?%v", params.Encode()), nil, http.Header{}, nil)
+	if err != nil {
+		return "", err
+	}
+
+	err = json.Unmarshal(response, &preset_response)
+
+	if err != nil {
+		return "", err
+	}
+	if len(preset_response.Presets) == 0 {
+		return "", fmt.Errorf("no such preset %v found", name)
+	}
+	if len(preset_response.Presets) > 1 {
+		return "", fmt.Errorf("%d presets found matching %v", len(preset_response.Presets), name)
+	}
+	return preset_response.Presets[0].PresetID, nil
+}
+
+func (sys *SystemInstance) GetIACPresetNameByID(id string) (string, error) {
+	var preset struct {
+		PresetID string
+		Name     string
+	}
+
+	response, err := sendRequest(sys, http.MethodGet, fmt.Sprintf("/preset-manager/iac/presets/%v", id), nil, http.Header{}, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to get preset %v: %s", id, err)
+	}
+
+	err = json.Unmarshal(response, &preset)
+	return preset.PresetID, err
 }
 
 func (sys *SystemInstance) GetProjectConfiguration(projectID string) ([]ProjectConfigurationSetting, error) {
@@ -1082,10 +1142,22 @@ func (sys *SystemInstance) SetProjectBranch(projectID, branch string, allowOverr
 	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
 }
 
-func (sys *SystemInstance) SetProjectPreset(projectID, presetName string, allowOverride bool) error {
+func (sys *SystemInstance) SetProjectSASTPreset(projectID, presetName string, allowOverride bool) error {
 	var setting ProjectConfigurationSetting
 	setting.Key = "scan.config.sast.presetName"
 	setting.Value = presetName
+	setting.AllowOverride = allowOverride
+
+	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
+}
+func (sys *SystemInstance) SetProjectIACPreset(projectID, presetName string, allowOverride bool) error {
+	var setting ProjectConfigurationSetting
+	setting.Key = "scan.config.kics.presetName"
+	presetId, err := sys.GetIACPresetIDByName(presetName)
+	if err != nil {
+		return err
+	}
+	setting.Value = presetId
 	setting.AllowOverride = allowOverride
 
 	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
@@ -1100,14 +1172,22 @@ func (sys *SystemInstance) SetProjectLanguageMode(projectID, languageMode string
 	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
 }
 
-func (sys *SystemInstance) SetProjectFileFilter(projectID, filter string, allowOverride bool) error {
+func (sys *SystemInstance) SetProjectSASTFileFilter(projectID, filter string, allowOverride bool) error {
 	var setting ProjectConfigurationSetting
 	setting.Key = "scan.config.sast.filter"
 	setting.Value = filter
 	setting.AllowOverride = allowOverride
 
-	// TODO - apply the filter across all languages? set up separate calls per engine? engine as param?
+	// TODO - apply the filter across all languages?
 
+	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
+}
+
+func (sys *SystemInstance) SetProjectIACFileFilter(projectID, filter string, allowOverride bool) error {
+	var setting ProjectConfigurationSetting
+	setting.Key = "scan.config.kics.filter"
+	setting.Value = filter
+	setting.AllowOverride = allowOverride
 	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
 }
 
