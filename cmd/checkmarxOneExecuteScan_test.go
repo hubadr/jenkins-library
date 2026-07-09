@@ -49,12 +49,24 @@ func (sys *checkmarxOneSystemMock) GetScan(scanID string) (checkmarxOne.Scan, er
 	return checkmarxOne.Scan{}, nil
 }
 
-func (sys *checkmarxOneSystemMock) GetScanMetadata(scanID string) (checkmarxOne.ScanMetadata, error) {
+func (sys *checkmarxOneSystemMock) GetScanMetadata(scan *checkmarxOne.Scan) (checkmarxOne.ScanMetadata, error) {
 	return checkmarxOne.ScanMetadata{}, nil
 }
 
-func (sys *checkmarxOneSystemMock) GetScanMetadatas(scanID []string) ([]checkmarxOne.ScanMetadata, error) {
-	return []checkmarxOne.ScanMetadata{}, nil
+func (sys *checkmarxOneSystemMock) GetScanSASTMetadata(scanID string) (checkmarxOne.ScanSASTMetadata, error) {
+	return checkmarxOne.ScanSASTMetadata{}, nil
+}
+
+func (sys *checkmarxOneSystemMock) GetScanIACMetadata(scanID string) (checkmarxOne.ScanIACMetadata, error) {
+	return checkmarxOne.ScanIACMetadata{}, nil
+}
+
+func (sys *checkmarxOneSystemMock) GetScanSASTMetadatas(scanID []string) ([]checkmarxOne.ScanSASTMetadata, error) {
+	return []checkmarxOne.ScanSASTMetadata{}, nil
+}
+
+func (sys *checkmarxOneSystemMock) GetScanConfiguration(_, _ string) (map[string]string, error) {
+	return map[string]string{}, nil
 }
 
 func (sys *checkmarxOneSystemMock) GetScanResults(scanID string, limit uint64) ([]checkmarxOne.ScanResult, error) {

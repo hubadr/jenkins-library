@@ -131,8 +131,6 @@ spec:
         default:
           ""
       - name: iacPreset
-        aliases:
-          - name: preset
         type: string
         description: The preset to use for IAC scanning, if not set explicitly the step will attempt to look up the project's setting based on the availability of `checkmarxOneCredentialsId`
         scope:
@@ -587,7 +585,7 @@ spec:
               - name: scan_time
               - name: tool_version
               - name: scan_type
-              - name: sast_preset
+              - name: preset
               - name: iac_preset
               - name: deep_link
               - name: report_creation_time

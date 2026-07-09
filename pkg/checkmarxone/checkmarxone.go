@@ -23,6 +23,7 @@ import (
 // ReportsDirectory defines the subfolder for the Checkmarx reports which are generated
 const ReportsDirectory = "checkmarxOne"
 const cxOrigin = ""
+const iacDefaultBlankPreset = "default all"
 
 // AuthToken - Structure to store OAuth2 token
 // Updated for Cx1
@@ -147,10 +148,22 @@ type ScanConfiguration struct {
 	Values   map[string]string `json:"value"`
 }
 
-/*
-{"scanId":"bef5d38b-7eb9-4138-b74b-2639fcf49e2e","projectId":"ad34ade3-9bf3-4b5a-91d7-3ad67eca7852","loc":137,"fileCount":12,"isIncremental":false,"isIncrementalCanceled":false,"queryPreset":"ASA Premium"}
-*/
 type ScanMetadata struct {
+	IAC  *ScanIACMetadata
+	SAST *ScanSASTMetadata
+}
+
+type ScanIACMetadata struct {
+	ScanID     string
+	ProjectID  string
+	LOC        int
+	FileCount  int
+	IACLOC     int `json:"kicsLoc"`
+	PresetName string
+	PresetID   string
+}
+
+type ScanSASTMetadata struct {
 	ScanID                string
 	ProjectID             string
 	LOC                   int
@@ -158,12 +171,6 @@ type ScanMetadata struct {
 	IsIncremental         bool
 	IsIncrementalCanceled bool
 	PresetName            string `json:"queryPreset"`
-}
-
-type ScanMetadataList struct {
-	TotalCount int
-	Scans      []ScanMetadata
-	Missing    []string
 }
 
 type ScanResultData struct {
@@ -282,6 +289,37 @@ type Group struct {
 	Name    string `json:"name"`
 }
 
+// this is a convenience object to facilitate accessing SAST configuration settings from the code
+type sastConfigKeys struct {
+	PresetName   string
+	Incremental  string
+	LanguageMode string
+	FileFilter   string
+}
+
+// this is a convenience object to facilitate accessing IAC configuration settings from the code
+type iacConfigKeys struct {
+	PresetID   string
+	FileFilter string
+}
+
+// this is a convenience object to facilitate accessing configuration settings from the code
+var ConfigurationKeys = struct {
+	SAST sastConfigKeys
+	IAC  iacConfigKeys
+}{
+	SAST: sastConfigKeys{
+		PresetName:   "scan.config.sast.presetName",
+		Incremental:  "scan.config.sast.incremental",
+		LanguageMode: "scan.config.sast.languageMode",
+		FileFilter:   "scan.config.sast.filter",
+	},
+	IAC: iacConfigKeys{
+		PresetID:   "scan.config.kics.presetId",
+		FileFilter: "scan.config.kics.filter",
+	},
+}
+
 // SystemInstance is the client communicating with the Checkmarx backend
 type SystemInstance struct {
 	serverURL           string
@@ -306,8 +344,11 @@ type System interface {
 	UpdateApplication(app *Application) error
 
 	GetScan(scanID string) (Scan, error)
-	GetScanMetadata(scanID string) (ScanMetadata, error)
-	GetScanMetadatas(scanIDs []string) ([]ScanMetadata, error)
+	GetScanConfiguration(projectID, scanID string) (map[string]string, error)
+	GetScanMetadata(scan *Scan) (ScanMetadata, error)
+	GetScanSASTMetadata(scanID string) (ScanSASTMetadata, error)
+	GetScanSASTMetadatas(scanIDs []string) ([]ScanSASTMetadata, error)
+	GetScanIACMetadata(scanID string) (ScanIACMetadata, error)
 	GetScanResults(scanID string, limit uint64) ([]ScanResult, error)
 	GetScanSummary(scanID string) (ScanSummary, error)
 	GetResultsPredicates(SimilarityID int64, ProjectID string) ([]ResultsPredicates, error)
@@ -1040,6 +1081,9 @@ func (sys *SystemInstance) GetPresets() ([]Preset, error) {
 */
 
 func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
+	if name == iacDefaultBlankPreset {
+		return "", nil
+	}
 	type IACPreset struct {
 		PresetID string
 		Name     string
@@ -1077,6 +1121,9 @@ func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
 }
 
 func (sys *SystemInstance) GetIACPresetNameByID(id string) (string, error) {
+	if id == "" {
+		return iacDefaultBlankPreset, nil
+	}
 	var preset struct {
 		PresetID string
 		Name     string
@@ -1205,37 +1252,140 @@ func (sys *SystemInstance) GetScan(scanID string) (Scan, error) {
 	return scan, nil
 }
 
-func (sys *SystemInstance) GetScanMetadatas(scanIDs []string) ([]ScanMetadata, error) {
+func (sys *SystemInstance) GetScanConfiguration(projectID, scanID string) (map[string]string, error) {
+	config := map[string]string{}
+
+	params := url.Values{
+		"scan-id":    {scanID},
+		"project-id": {projectID},
+	}
+
+	data, err := sendRequest(sys, http.MethodGet, fmt.Sprintf("/configuration/scan?%v", params.Encode()), nil, http.Header{}, []int{})
+	if err != nil {
+		sys.logger.Errorf("Failed to fetch configuration for project %s scan %s, error was: %s", projectID, scanID, err)
+		return config, fmt.Errorf("failed to fetch metadata for scans: %w", err)
+	}
+
+	var configurations []struct {
+		Key   string `json:"key"`
+		Value string `json:"value"`
+	}
+
+	err = json.Unmarshal(data, &configurations)
+	if err != nil {
+		return config, fmt.Errorf("failed to parse scan configurations: %s", err)
+	}
+
+	for _, conf := range configurations {
+		config[conf.Key] = conf.Value
+	}
+	return config, nil
+}
+
+func (sys *SystemInstance) GetScanMetadata(scan *Scan) (ScanMetadata, error) {
+	var scanmeta ScanMetadata
+	if slices.Contains(scan.Engines, "kics") {
+		meta, err := sys.GetScanIACMetadata(scan.ScanID)
+		if err != nil {
+			return scanmeta, err
+		}
+		scanmeta.IAC = &meta
+	}
+	if slices.Contains(scan.Engines, "sast") {
+		meta, err := sys.GetScanSASTMetadata(scan.ScanID)
+		if err != nil {
+			return scanmeta, err
+		}
+		scanmeta.SAST = &meta
+	}
+	return scanmeta, nil
+}
+
+func (sys *SystemInstance) GetScanSASTMetadatas(scanIDs []string) ([]ScanSASTMetadata, error) {
 	params := url.Values{
 		"scan-ids": scanIDs,
 	}
-	var scanmetadatalistresp ScanMetadataList
-	var scans []ScanMetadata
+	var scanmetadatalistresp struct {
+		TotalCount int
+		Scans      []ScanSASTMetadata
+		Missing    []string
+	}
+	var scanmetas []ScanSASTMetadata
 
 	data, err := sendRequest(sys, http.MethodGet, fmt.Sprintf("/sast-metadata?%v", params.Encode()), nil, http.Header{}, []int{})
 	if err != nil {
-		sys.logger.Errorf("Failed to fetch metadata for scans %s, error was: %s", fmt.Sprintf("%v", strings.Join(scanIDs, ",")), err)
-		return scans, fmt.Errorf("failed to fetch metadata for scans: %w", err)
+		sys.logger.Errorf("Failed to fetch SAST metadata for scans %s, error was: %s", fmt.Sprintf("%v", strings.Join(scanIDs, ",")), err)
+		return scanmetas, fmt.Errorf("failed to fetch SAST metadata for scans: %w", err)
 	}
 
 	json.Unmarshal(data, &scanmetadatalistresp)
-	scans = scanmetadatalistresp.Scans
-	return scans, nil
-
+	scanmetas = scanmetadatalistresp.Scans
+	return scanmetas, nil
 }
 
-func (sys *SystemInstance) GetScanMetadata(scanID string) (ScanMetadata, error) {
-	var scanmeta ScanMetadata
-
+func (sys *SystemInstance) GetScanSASTMetadata(scanID string) (ScanSASTMetadata, error) {
+	var scanmeta ScanSASTMetadata
 	data, err := sendRequest(sys, http.MethodGet, fmt.Sprintf("/sast-metadata/%v", scanID), nil, http.Header{}, []int{})
 	if err != nil {
-		sys.logger.Errorf("Failed to fetch metadata for scan with ID %v: %s", scanID, err)
-		return scanmeta, fmt.Errorf("failed to fetch metadata for scan with ID %v: %w", scanID, err)
+		sys.logger.Errorf("Failed to fetch SAST metadata for scan with ID %v: %s", scanID, err)
+		return scanmeta, fmt.Errorf("failed to fetch SAST metadata for scan with ID %v: %w", scanID, err)
 	}
 
-	json.Unmarshal(data, &scanmeta)
+	err = json.Unmarshal(data, &scanmeta)
+	if err != nil {
+		return scanmeta, err
+	}
+
 	return scanmeta, nil
 }
+
+func (sys *SystemInstance) GetScanIACMetadata(scanID string) (ScanIACMetadata, error) {
+	var scanmeta ScanIACMetadata
+	data, err := sendRequest(sys, http.MethodGet, fmt.Sprintf("/kics-metadata/%v", scanID), nil, http.Header{}, []int{})
+	if err != nil {
+		sys.logger.Errorf("Failed to fetch IAC metadata for scan with ID %v: %s", scanID, err)
+		return scanmeta, fmt.Errorf("failed to fetch IAC metadata for scan with ID %v: %w", scanID, err)
+	}
+
+	err = json.Unmarshal(data, &scanmeta)
+	if err != nil {
+		return scanmeta, err
+	}
+
+	presetName, err := sys.GetIACPresetNameByID(scanmeta.PresetID)
+	if err != nil {
+		sys.logger.Errorf("Failed to fetch IAC preset name for preset ID %s", scanmeta.PresetID)
+		scanmeta.PresetName = "unknown preset with id " + scanmeta.PresetID
+	} else {
+		scanmeta.PresetName = presetName
+	}
+
+	return scanmeta, nil
+}
+
+/*
+
+	scanconfig, err := sys.GetScanConfiguration(scan.ProjectID, scan.ScanID)
+	if err != nil {
+		return scanmeta, err
+	}
+
+	iacPresetID, ok := scanconfig[checkmarxOne.ConfigurationKeys.IAC.PresetID]
+	if !ok || iacPresetID == "" {
+		scanmeta.IACPresetName = iacDefaultBlankPreset
+		scanmeta.IACPresetID = iacDefaultBlankPreset
+	} else {
+		scanmeta.IACPresetID = iacPresetID
+		iacPresetName, err := sys.GetIACPresetNameByID(iacPresetID)
+		if err != nil {
+			log.Entry().Warningf("Failed to identify IAC preset with ID %s: %s", iacPresetID, err)
+			scanmeta.IACPresetName = "unknown preset " + iacPresetID
+		} else {
+			scanmeta.IACPresetName = iacPresetName
+		}
+
+	}
+*/
 
 func (sys *SystemInstance) GetScanWorkflow(scanID string) ([]WorkflowLog, error) {
 	var workflow []WorkflowLog
@@ -1562,6 +1712,28 @@ func (sys *SystemInstance) GetVersion() (VersionInfo, error) {
 
 	err = json.Unmarshal(data, &version)
 	return version, err
+}
+
+func (s ScanMetadata) TotalLOC() int {
+	total := 0
+	if s.SAST != nil {
+		total += s.SAST.LOC
+	}
+	if s.IAC != nil {
+		total += s.IAC.IACLOC
+	}
+	return total
+}
+
+func (s ScanMetadata) TotalFiles() int {
+	total := 0
+	if s.SAST != nil {
+		total += s.SAST.FileCount
+	}
+	if s.IAC != nil {
+		total += s.IAC.FileCount
+	}
+	return total
 }
 
 func (v VersionInfo) CheckCxOne(version string) int {

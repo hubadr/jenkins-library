@@ -209,7 +209,8 @@ func TestGetGroups(t *testing.T) {
 	})
 }
 
-func TestGetScanMetadata(t *testing.T) {
+// TODO: similar test for IAC
+func TestGetScanSASTMetadata(t *testing.T) {
 	logger := log.Entry().WithField("package", "SAP/jenkins-library/pkg/checkmarxOne_test")
 	opts := piperHttp.ClientOptions{}
 	t.Run("test success", func(t *testing.T) {
@@ -217,7 +218,7 @@ func TestGetScanMetadata(t *testing.T) {
 		sys := SystemInstance{serverURL: "https://cx1.server.com", iamURL: "https://cx1iam.server.com", tenant: "tenant", client: &myTestClient, logger: logger}
 		myTestClient.SetOptions(opts)
 
-		scanmeta, err := sys.GetScanMetadata("03d66397-36df-40b5-8976-f38bcce695a7")
+		scanmeta, err := sys.GetScanSASTMetadata("03d66397-36df-40b5-8976-f38bcce695a7")
 		assert.NoError(t, err, "Error occurred but none expected")
 
 		assert.Equal(t, "03d66397-36df-40b5-8976-f38bcce695a7", scanmeta.ScanID, "ScanID is incorrect")
@@ -235,7 +236,7 @@ func TestGetScanMetadata(t *testing.T) {
 		myTestClient.SetOptions(opts)
 		myTestClient.errorExp = true
 
-		_, err := sys.GetScanMetadata("03d66397-36df-40b5-8976-f38bcce695a7")
+		_, err := sys.GetScanSASTMetadata("03d66397-36df-40b5-8976-f38bcce695a7")
 		assert.Contains(t, fmt.Sprint(err), "Provoked technical error")
 	})
 }

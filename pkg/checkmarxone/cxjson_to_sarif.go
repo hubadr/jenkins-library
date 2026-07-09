@@ -11,7 +11,7 @@ import (
 )
 
 // ConvertCxJSONToSarif is the entrypoint for the Parse function
-func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scanMeta *ScanMetadata, scan *Scan) (format.SARIF, error) {
+func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scanMeta *ScanSASTMetadata, scan *Scan) (format.SARIF, error) {
 	// Process sarif
 	start := time.Now()
 
