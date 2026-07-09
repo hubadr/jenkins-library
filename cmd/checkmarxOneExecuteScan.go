@@ -250,6 +250,11 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 
 func Authenticate(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteScanInflux) (checkmarxOneExecuteScanHelper, error) {
 	client := &piperHttp.Client{}
+	proxyUrl, _ := url.Parse("http://127.0.0.1:8080")
+	client.SetOptions(piperHttp.ClientOptions{
+		TransportSkipVerification: true,
+		TransportProxy:            proxyUrl,
+	})
 
 	ctx, ghClient, err := piperGithub.NewClientBuilder(config.GithubToken, config.GithubAPIURL).Build()
 	if err != nil {
@@ -974,10 +979,13 @@ func (c *checkmarxOneExecuteScanHelper) CheckCompliance(scan *checkmarxOne.Scan,
 	return nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) GetReportPDF(scan *checkmarxOne.Scan) error {
+func (c *checkmarxOneExecuteScanHelper) GetReportPDF(scan *checkmarxOne.Scan, engines []string) error {
+	if len(engines) == 0 {
+		return fmt.Errorf("cannot generate a report for 0 engines")
+	}
 	if c.config.GeneratePdfReport {
-		pdfReportName := c.createReportName(c.utils.GetWorkspace(), "Cx1_SASTReport_%v.pdf")
-		err := c.downloadAndSaveReport(pdfReportName, scan, "pdf")
+		pdfReportName := c.createReportName(c.utils.GetWorkspace(), "Cx1_"+strings.ToUpper(engines[0])+"Report_%v.pdf")
+		err := c.downloadAndSaveReport(pdfReportName, scan, "pdf", engines)
 		if err != nil {
 			return fmt.Errorf("Report download failed: %s", err)
 		} else {
@@ -990,25 +998,30 @@ func (c *checkmarxOneExecuteScanHelper) GetReportPDF(scan *checkmarxOne.Scan) er
 	return nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) GetReportSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanSASTMetadata, results *[]checkmarxOne.ScanResult) error {
+func (c *checkmarxOneExecuteScanHelper) GetReportSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
 	if c.config.ConvertToSarif {
-		log.Entry().Info("Calling conversion to SARIF function.")
-		sarif, err := checkmarxOne.ConvertCxJSONToSarif(c.sys, c.config.ServerURL, results, scanmeta, scan)
-		if err != nil {
-			return fmt.Errorf("Failed to generate SARIF: %s", err)
+		if scanmeta.SAST != nil {
+			log.Entry().Info("Calling conversion to SARIF function.")
+			sarif, err := checkmarxOne.ConvertCxJSONToSarif(c.sys, c.config.ServerURL, results, scanmeta.SAST, scan)
+			if err != nil {
+				return fmt.Errorf("Failed to generate SARIF: %s", err)
+			}
+			paths, err := checkmarxOne.WriteSarif(sarif)
+			if err != nil {
+				return fmt.Errorf("Failed to write SARIF: %s", err)
+			}
+			c.reports = append(c.reports, paths...)
 		}
-		paths, err := checkmarxOne.WriteSarif(sarif)
-		if err != nil {
-			return fmt.Errorf("Failed to write SARIF: %s", err)
-		}
-		c.reports = append(c.reports, paths...)
 	}
 	return nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) GetReportJSON(scan *checkmarxOne.Scan) error {
-	jsonReportName := c.createReportName(c.utils.GetWorkspace(), "Cx1_SASTReport_%v.json")
-	err := c.downloadAndSaveReport(jsonReportName, scan, "json")
+func (c *checkmarxOneExecuteScanHelper) GetReportJSON(scan *checkmarxOne.Scan, engines []string) error {
+	if len(engines) == 0 {
+		return fmt.Errorf("cannot generate a report for 0 engines")
+	}
+	jsonReportName := c.createReportName(c.utils.GetWorkspace(), "Cx1_"+strings.ToUpper(engines[0])+"Report_%v.json")
+	err := c.downloadAndSaveReport(jsonReportName, scan, "json", engines)
 	if err != nil {
 		return fmt.Errorf("Report download failed: %s", err)
 	} else {
@@ -1058,18 +1071,36 @@ func (c *checkmarxOneExecuteScanHelper) ParseResults(scan *checkmarxOne.Scan) (m
 		return detailedResults, fmt.Errorf("Unable to fetch detailed results for scan %v: %s", scan.ScanID, err)
 	}
 
-	err = c.GetReportJSON(scan)
-	if err != nil {
-		log.Entry().WithError(err).Warnf("Failed to get JSON report")
+	if c.ScanSAST {
+		err = c.GetReportJSON(scan, []string{"sast"})
+		if err != nil {
+			log.Entry().WithError(err).Warnf("Failed to get JSON SAST report")
+		}
+		err = c.GetReportPDF(scan, []string{"sast"})
+		if err != nil {
+			log.Entry().WithError(err).Warnf("Failed to get PDF SAST report")
+		}
+		err = c.GetReportSARIF(scan, &scanmeta, &results)
+		if err != nil {
+			log.Entry().WithError(err).Warnf("Failed to get SARIF SAST report")
+		}
 	}
-	err = c.GetReportPDF(scan)
-	if err != nil {
-		log.Entry().WithError(err).Warnf("Failed to get PDF report")
+
+	if c.ScanIAC {
+		err = c.GetReportJSON(scan, []string{"iac"})
+		if err != nil {
+			log.Entry().WithError(err).Warnf("Failed to get JSON IAC report")
+		}
+		err = c.GetReportPDF(scan, []string{"iac"})
+		if err != nil {
+			log.Entry().WithError(err).Warnf("Failed to get PDF IAC report")
+		}
+		/*err = c.GetReportSARIF(scan, scanmeta.SAST, &results)
+		if err != nil {
+			log.Entry().WithError(err).Warnf("Failed to get SARIF SAST report")
+		}*/
 	}
-	err = c.GetReportSARIF(scan, scanmeta.SAST, &results)
-	if err != nil {
-		log.Entry().WithError(err).Warnf("Failed to get SARIF report")
-	}
+
 	err = c.GetHeaderReportJSON(&detailedResults)
 	if err != nil {
 		log.Entry().WithError(err).Warnf("Failed to generate JSON Header report")
@@ -1093,8 +1124,8 @@ func (c *checkmarxOneExecuteScanHelper) createReportName(workspace, reportFileNa
 	return filepath.Join(workspace, fmt.Sprintf(reportFileNameTemplate, regExpFileName.ReplaceAllString(string(timeStamp), "_")))
 }
 
-func (c *checkmarxOneExecuteScanHelper) downloadAndSaveReport(reportFileName string, scan *checkmarxOne.Scan, reportType string) error {
-	report, err := c.generateAndDownloadReport(scan, reportType)
+func (c *checkmarxOneExecuteScanHelper) downloadAndSaveReport(reportFileName string, scan *checkmarxOne.Scan, reportType string, engines []string) error {
+	report, err := c.generateAndDownloadReport(scan, reportType, engines)
 	if err != nil {
 		return fmt.Errorf("failed to download the report: %w", err)
 	}
@@ -1102,10 +1133,10 @@ func (c *checkmarxOneExecuteScanHelper) downloadAndSaveReport(reportFileName str
 	return c.utils.WriteFile(reportFileName, report, 0o700)
 }
 
-func (c *checkmarxOneExecuteScanHelper) generateAndDownloadReport(scan *checkmarxOne.Scan, reportType string) ([]byte, error) {
+func (c *checkmarxOneExecuteScanHelper) generateAndDownloadReport(scan *checkmarxOne.Scan, reportType string, engines []string) ([]byte, error) {
 	var finalStatus checkmarxOne.ReportStatus
 
-	report, err := c.sys.RequestNewReport(scan.ScanID, scan.ProjectID, scan.Branch, reportType)
+	report, err := c.sys.RequestNewReport(scan.ScanID, scan.ProjectID, scan.Branch, reportType, engines)
 	if err != nil {
 		return []byte{}, fmt.Errorf("failed to request new report: %w", err)
 	}
@@ -1179,9 +1210,6 @@ func (c *checkmarxOneExecuteScanHelper) getDetailedResults(scan *checkmarxOne.Sc
 		}
 	}
 
-	resultMap["LinesOfCodeScanned"] = scanmeta.TotalLOC()
-	resultMap["FilesScanned"] = scanmeta.TotalFiles()
-
 	version, err := c.sys.GetVersion()
 	if err != nil {
 		resultMap["ToolVersion"] = "Error fetching current version"
@@ -1196,15 +1224,25 @@ func (c *checkmarxOneExecuteScanHelper) getDetailedResults(scan *checkmarxOne.Sc
 		} else {
 			resultMap["ScanType"] = "Incremental"
 		}
+
+		resultMap["LinesOfCodeScanned"] = scanmeta.SAST.LOC
+		resultMap["FilesScanned"] = scanmeta.SAST.FileCount
 	} else {
 		resultMap["ScanType"] = "Full"
-		resultMap["SastPreset"] = "n/a"
+		resultMap["Preset"] = "n/a"
+
+		resultMap["LinesOfCodeScanned"] = 0
+		resultMap["FilesScanned"] = 0
 	}
 
 	if scanmeta.IAC != nil {
 		resultMap["IacPreset"] = scanmeta.IAC.PresetName
+		resultMap["IacLinesOfCodeScanned"] = scanmeta.IAC.IACLOC
+		resultMap["IacFilesScanned"] = scanmeta.IAC.FileCount
 	} else {
 		resultMap["IacPreset"] = "n/a"
+		resultMap["IacLinesOfCodeScanned"] = 0
+		resultMap["IacFilesScanned"] = 0
 	}
 	resultMap["DeepLink"] = fmt.Sprintf("%v/projects/%v/overview?branch=%v", c.config.ServerURL, c.Project.ProjectID, url.QueryEscape(scan.Branch))
 	resultMap["ReportCreationTime"] = time.Now().String()

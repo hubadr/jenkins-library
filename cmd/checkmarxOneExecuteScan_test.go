@@ -25,7 +25,7 @@ func (sys *checkmarxOneSystemMock) GetReportStatus(reportID string) (checkmarxOn
 	return checkmarxOne.ReportStatus{}, nil
 }
 
-func (sys *checkmarxOneSystemMock) RequestNewReport(scanID, projectID, branch, reportType string) (string, error) {
+func (sys *checkmarxOneSystemMock) RequestNewReport(scanID, projectID, branch, reportType string, engines []string) (string, error) {
 	return "", nil
 }
 

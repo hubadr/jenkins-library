@@ -174,7 +174,7 @@ type ScanSASTMetadata struct {
 }
 
 type ScanResultData struct {
-	QueryID      uint64
+	QueryID      string
 	QueryName    string
 	Group        string
 	ResultHash   string
@@ -201,7 +201,7 @@ type ScanResultNodes struct {
 type ScanResult struct {
 	Type                 string
 	ResultID             string `json:"id"`
-	SimilarityID         int64  `json:"similarityId,string"`
+	SimilarityID         string
 	Status               string
 	State                string
 	Severity             string
@@ -230,38 +230,41 @@ type ScanStatusDetails struct {
 type ScanSummary struct {
 	TenantID     string
 	ScanID       string
-	SASTCounters struct {
-		//QueriesCounters           []?
-		//SinkFileCounters          []?
-		LanguageCounters []struct {
-			Language string
-			Counter  uint64
-		}
-		ComplianceCounters []struct {
-			Compliance string
-			Counter    uint64
-		}
-		SeverityCounters []struct {
-			Severity string
-			Counter  uint64
-		}
-		StatusCounters []struct {
-			Status  string
-			Counter uint64
-		}
-		StateCounters []struct {
-			State   string
-			Counter uint64
-		}
-		TotalCounter        uint64
-		FilesScannedCounter uint64
-	}
+	SASTCounters ScanSummaryCounters
+	IACCounters  ScanSummaryCounters `json:"kicsCounters"`
 	// ignoring the other counters
 	// KICSCounters
 	// SCACounters
 	// SCAPackagesCounters
 	// SCAContainerCounters
 	// APISecCounters
+}
+
+type ScanSummaryCounters struct {
+	//QueriesCounters           []?
+	//SinkFileCounters          []?
+	LanguageCounters []struct {
+		Language string
+		Counter  uint64
+	}
+	ComplianceCounters []struct {
+		Compliance string
+		Counter    uint64
+	}
+	SeverityCounters []struct {
+		Severity string
+		Counter  uint64
+	}
+	StatusCounters []struct {
+		Status  string
+		Counter uint64
+	}
+	StateCounters []struct {
+		State   string
+		Counter uint64
+	}
+	TotalCounter        uint64
+	FilesScannedCounter uint64
 }
 
 // Status - Status Structure
@@ -336,7 +339,7 @@ type SystemInstance struct {
 type System interface {
 	DownloadReport(reportID string) ([]byte, error)
 	GetReportStatus(reportID string) (ReportStatus, error)
-	RequestNewReport(scanID, projectID, branch, reportType string) (string, error)
+	RequestNewReport(scanID, projectID, branch, reportType string, engines []string) (string, error)
 
 	CreateApplication(appname string) (Application, error)
 	GetApplicationByName(appname string) (Application, error)
@@ -1528,6 +1531,10 @@ func (s *ScanSummary) TotalCount() uint64 {
 		count += c.Counter
 	}
 
+	for _, c := range s.IACCounters.StateCounters {
+		count += c.Counter
+	}
+
 	return count
 }
 
@@ -1598,12 +1605,12 @@ func (sys *SystemInstance) GetResultsPredicates(SimilarityID int64, ProjectID st
 }
 
 // RequestNewReport triggers the generation of a  report for a specific scan addressed by scanID
-func (sys *SystemInstance) RequestNewReport(scanID, projectID, branch, reportType string) (string, error) {
-	return sys.RequestNewReportV2(scanID, reportType) // Report generation v1 API is removed in CxONE 3.36, use RequestNewReportV2 instead
-}
+func (sys *SystemInstance) RequestNewReport(scanID, projectID, branch, reportType string, engines []string) (string, error) {
+	return sys.RequestNewReportV2(scanID, reportType, engines) // Report generation v1 API is removed in CxONE 3.36, use RequestNewReportV2 instead
+} // TODO: remove this wrapper?
 
 // Use the new V2 Report API to generate a PDF report
-func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string) (string, error) {
+func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string, engines []string) (string, error) {
 	jsonData := map[string]interface{}{
 		"reportName": "improved-scan-report",
 		"entities": []map[string]interface{}{
@@ -1614,7 +1621,7 @@ func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string) (string
 			},
 		},
 		"filters": map[string][]string{
-			"scanners": {"sast"},
+			"scanners": engines,
 			"severities": {
 				"critical",
 				"high",
