@@ -27,12 +27,14 @@ type CheckmarxOneReportData struct {
 	GroupID         string     `json:"groupID"`
 	DeepLink        string     `json:"deepLink"`
 	Preset          string     `json:"preset"`
+	IACPreset       string     `json:"iacPreset"`
 	ScanType        string     `json:"scanType"`
 	Findings        *[]Finding `json:"findings"`
 }
 
 type Finding struct {
 	ClassificationName string         `json:"classificationName"`
+	Engine             string         `json:"engine"`
 	Total              int            `json:"total,omitempty"`
 	Audited            *int           `json:"audited,omitempty"`
 	Confirmed          int            `json:"confirmed,omitempty"`
@@ -62,9 +64,12 @@ func CreateCustomReport(data *map[string]interface{}, insecure, neutral []string
 			{Description: "Scan duration", Details: fmt.Sprint((*data)["ScanTime"])},
 			{Description: "Scan type", Details: fmt.Sprint((*data)["ScanType"])},
 			{Description: "Preset", Details: fmt.Sprint((*data)["Preset"])},
+			{Description: "IAC Preset", Details: fmt.Sprint((*data)["IacPreset"])},
 			{Description: "Report creation time", Details: fmt.Sprint((*data)["ReportCreationTime"])},
-			{Description: "Lines of code scanned", Details: fmt.Sprint((*data)["LinesOfCodeScanned)"])},
-			{Description: "Files scanned", Details: fmt.Sprint((*data)["FilesScanned)"])},
+			{Description: "Lines of code scanned", Details: fmt.Sprint((*data)["LinesOfCodeScanned"])},
+			{Description: "Files scanned", Details: fmt.Sprint((*data)["FilesScanned"])},
+			{Description: "IAC Lines of code scanned", Details: fmt.Sprint((*data)["IacLinesOfCodeScanned"])},
+			{Description: "IAC Files scanned", Details: fmt.Sprint((*data)["IacFilesScanned"])},
 			{Description: "Tool version", Details: fmt.Sprint((*data)["ToolVersion"])},
 			{Description: "Deep link", Details: deepLink},
 		},

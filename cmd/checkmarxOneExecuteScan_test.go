@@ -25,7 +25,7 @@ func (sys *checkmarxOneSystemMock) GetReportStatus(reportID string) (checkmarxOn
 	return checkmarxOne.ReportStatus{}, nil
 }
 
-func (sys *checkmarxOneSystemMock) RequestNewReport(scanID, projectID, branch, reportType string) (string, error) {
+func (sys *checkmarxOneSystemMock) RequestNewReport(scanID, projectID, branch, reportType string, engines []string) (string, error) {
 	return "", nil
 }
 
@@ -49,12 +49,24 @@ func (sys *checkmarxOneSystemMock) GetScan(scanID string) (checkmarxOne.Scan, er
 	return checkmarxOne.Scan{}, nil
 }
 
-func (sys *checkmarxOneSystemMock) GetScanMetadata(scanID string) (checkmarxOne.ScanMetadata, error) {
+func (sys *checkmarxOneSystemMock) GetScanMetadata(scan *checkmarxOne.Scan) (checkmarxOne.ScanMetadata, error) {
 	return checkmarxOne.ScanMetadata{}, nil
 }
 
-func (sys *checkmarxOneSystemMock) GetScanMetadatas(scanID []string) ([]checkmarxOne.ScanMetadata, error) {
-	return []checkmarxOne.ScanMetadata{}, nil
+func (sys *checkmarxOneSystemMock) GetScanSASTMetadata(scanID string) (checkmarxOne.ScanSASTMetadata, error) {
+	return checkmarxOne.ScanSASTMetadata{}, nil
+}
+
+func (sys *checkmarxOneSystemMock) GetScanIACMetadata(scanID string) (checkmarxOne.ScanIACMetadata, error) {
+	return checkmarxOne.ScanIACMetadata{}, nil
+}
+
+func (sys *checkmarxOneSystemMock) GetScanSASTMetadatas(scanID []string) ([]checkmarxOne.ScanSASTMetadata, error) {
+	return []checkmarxOne.ScanSASTMetadata{}, nil
+}
+
+func (sys *checkmarxOneSystemMock) GetScanConfiguration(_, _ string) (map[string]string, error) {
+	return map[string]string{}, nil
 }
 
 func (sys *checkmarxOneSystemMock) GetScanResults(scanID string, limit uint64) ([]checkmarxOne.ScanResult, error) {
@@ -216,6 +228,14 @@ func (sys *checkmarxOneSystemMock) GetGroupByName(groupName string) (checkmarxOn
 	return group, fmt.Errorf("No group matching %v", groupName)
 }
 
+func (sys *checkmarxOneSystemMock) GetIACPresetNameByID(_ string) (string, error) {
+	return "my-iac-preset", nil
+}
+
+func (sys *checkmarxOneSystemMock) GetIACPresetIDByName(_ string) (string, error) {
+	return "a-b-c-d", nil
+}
+
 func (sys *checkmarxOneSystemMock) GetGroupByID(groupID string) (checkmarxOne.Group, error) {
 	return checkmarxOne.Group{}, nil
 }
@@ -224,15 +244,23 @@ func (sys *checkmarxOneSystemMock) SetProjectBranch(projectID, branch string, al
 	return nil
 }
 
-func (sys *checkmarxOneSystemMock) SetProjectPreset(projectID, presetName string, allowOverride bool) error {
-	return nil
-}
-
 func (sys *checkmarxOneSystemMock) SetProjectLanguageMode(projectID, languageMode string, allowOverride bool) error {
 	return nil
 }
 
-func (sys *checkmarxOneSystemMock) SetProjectFileFilter(projectID, filter string, allowOverride bool) error {
+func (sys *checkmarxOneSystemMock) SetProjectSASTPreset(projectID, presetName string, allowOverride bool) error {
+	return nil
+}
+
+func (sys *checkmarxOneSystemMock) SetProjectIACPreset(projectID, presetName string, allowOverride bool) error {
+	return nil
+}
+
+func (sys *checkmarxOneSystemMock) SetProjectSASTFileFilter(projectID, filter string, allowOverride bool) error {
+	return nil
+}
+
+func (sys *checkmarxOneSystemMock) SetProjectIACFileFilter(projectID, filter string, allowOverride bool) error {
 	return nil
 }
 
@@ -270,9 +298,9 @@ func TestGetProjectByName(t *testing.T) {
 	t.Run("project name not found", func(t *testing.T) {
 		t.Parallel()
 
-		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba_notexist", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, Preset: "CheckmarxDefault", GroupName: "TestGroup", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
+		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba_notexist", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, SastPreset: "CheckmarxDefault", GroupName: "TestGroup", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
 
-		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, nil}
+		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, true, false, nil}
 
 		_, err := cx1sh.GetProjectByName()
 
@@ -281,9 +309,9 @@ func TestGetProjectByName(t *testing.T) {
 	t.Run("project name exists", func(t *testing.T) {
 		t.Parallel()
 
-		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba-github", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, Preset: "CheckmarxDefault", GroupName: "TestGroup", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
+		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba-github", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, SastPreset: "CheckmarxDefault", GroupName: "TestGroup", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
 
-		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, nil}
+		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, true, false, nil}
 
 		project, err := cx1sh.GetProjectByName()
 		assert.NoError(t, err, "Error occurred but none expected")
@@ -301,9 +329,9 @@ func TestGetGroup(t *testing.T) {
 	t.Run("group ID and group name is not provided", func(t *testing.T) {
 		t.Parallel()
 
-		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, Preset: "CheckmarxDefault" /*GroupName: "NotProvided",*/, VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
+		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, SastPreset: "CheckmarxDefault" /*GroupName: "NotProvided",*/, VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
 
-		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, nil}
+		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, true, false, nil}
 		_, err := cx1sh.GetGroup()
 		assert.Contains(t, fmt.Sprint(err), "No group name specified in configuration")
 	})
@@ -311,9 +339,9 @@ func TestGetGroup(t *testing.T) {
 	t.Run("group name not found", func(t *testing.T) {
 		t.Parallel()
 
-		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, Preset: "CheckmarxDefault", GroupName: "GroupNotExist", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
+		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, SastPreset: "CheckmarxDefault", GroupName: "GroupNotExist", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
 
-		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, nil}
+		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, true, false, nil}
 
 		_, err := cx1sh.GetGroup()
 		assert.Contains(t, fmt.Sprint(err), "Failed to get Checkmarx One group by Name GroupNotExist: No group matching GroupNotExist")
@@ -322,9 +350,9 @@ func TestGetGroup(t *testing.T) {
 	t.Run("group name exists", func(t *testing.T) {
 		t.Parallel()
 
-		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba-github", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, Preset: "CheckmarxDefault", GroupName: "Group2", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
+		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba-github", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, SastPreset: "CheckmarxDefault", GroupName: "Group2", VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
 
-		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, nil}
+		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, true, false, nil}
 
 		group, err := cx1sh.GetGroup()
 		assert.NoError(t, err, "Error occurred but none expected")
@@ -341,9 +369,9 @@ func TestUpdateProjectTags(t *testing.T) {
 	t.Run("project tags are not provided", func(t *testing.T) {
 		t.Parallel()
 
-		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, Preset: "CheckmarxDefault" /*GroupName: "NotProvided",*/, VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
+		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, SastPreset: "CheckmarxDefault" /*GroupName: "NotProvided",*/, VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant"}
 
-		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, nil}
+		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, nil, nil, nil, true, false, nil}
 		err := cx1sh.UpdateProjectTags()
 		assert.NoError(t, err, "Error occurred but none expected")
 	})
@@ -366,9 +394,9 @@ func TestUpdateProjectTags(t *testing.T) {
 		var project checkmarxOne.Project
 		_ = json.Unmarshal([]byte(projectJson), &project)
 
-		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, Preset: "CheckmarxDefault" /*GroupName: "NotProvided",*/, VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant", ProjectTags: `{"key3":"value3", "key2":"value5", "keywithoutvalue2":""}`}
+		options := checkmarxOneExecuteScanOptions{ProjectName: "ssba", VulnerabilityThresholdUnit: "absolute", FullScanCycle: "2", Incremental: true, FullScansScheduled: true, SastPreset: "CheckmarxDefault" /*GroupName: "NotProvided",*/, VulnerabilityThresholdEnabled: true, GeneratePdfReport: true, APIKey: "testAPIKey", ServerURL: "testURL", IamURL: "testIamURL", Tenant: "testTenant", ProjectTags: `{"key3":"value3", "key2":"value5", "keywithoutvalue2":""}`}
 
-		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, &project, nil, nil, nil}
+		cx1sh := checkmarxOneExecuteScanHelper{nil, options, sys, nil, nil, &project, nil, nil, true, false, nil}
 		err := cx1sh.UpdateProjectTags()
 		assert.NoError(t, err, "Error occurred but none expected")
 

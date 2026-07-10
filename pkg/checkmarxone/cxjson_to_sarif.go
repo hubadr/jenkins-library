@@ -11,7 +11,7 @@ import (
 )
 
 // ConvertCxJSONToSarif is the entrypoint for the Parse function
-func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scanMeta *ScanMetadata, scan *Scan) (format.SARIF, error) {
+func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scanMeta *ScanSASTMetadata, scan *Scan) (format.SARIF, error) {
 	// Process sarif
 	start := time.Now()
 
@@ -44,13 +44,23 @@ func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResul
 			cweCounter++
 		}
 
-		simidString := fmt.Sprintf("%d", r.SimilarityID)
-
 		var apiDescription string
 		result := *new(format.Results)
 
 		//General
-		result.RuleID = fmt.Sprintf("checkmarxOne-%v/%d", r.Data.LanguageName, r.Data.QueryID)
+
+		var queryID string
+		switch r.Type {
+		case "sast":
+			if v, ok := r.Data.QueryID.Value.(uint64); ok {
+				queryID = fmt.Sprintf("checkmarxOne-%v/%d", r.Data.LanguageName, v)
+			} else {
+				queryID = fmt.Sprintf("checkmarxOne-%v/%s", r.Data.LanguageName, r.Data.QueryID.Value.(string))
+			}
+		case "kics":
+			queryID = fmt.Sprintf("checkmarxOne-%v/%s", r.Data.Platform, r.Data.QueryID.Value.(string))
+		}
+		result.RuleID = queryID
 		result.RuleIndex = cweIdsForTaxonomies[r.VulnerabilityDetails.CweId]
 		result.Level = "none"
 		msg := new(format.Message)
@@ -65,18 +75,65 @@ func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResul
 		codeflow := *new(format.CodeFlow)
 		threadflow := *new(format.ThreadFlow)
 		locationSaved := false
-		for k := 0; k < len(r.Data.Nodes); k++ {
-			loc := *new(format.Location)
-			loc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName
-			// remove absolute path of file name (coming from JSON format)
-			if len(r.Data.Nodes[0].FileName) > 0 && r.Data.Nodes[0].FileName[0:1] == "/" {
-				loc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName[1:]
+		switch r.Type {
+		case "sast":
+			for k := 0; k < len(r.Data.Nodes); k++ {
+				loc := *new(format.Location)
+				loc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName
+				// remove absolute path of file name (coming from JSON format)
+				if len(r.Data.Nodes[0].FileName) > 0 && r.Data.Nodes[0].FileName[0:1] == "/" {
+					loc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName[1:]
+				}
+				loc.PhysicalLocation.Region.StartLine = r.Data.Nodes[k].Line
+				loc.PhysicalLocation.Region.EndLine = r.Data.Nodes[k].Line
+				loc.PhysicalLocation.Region.StartColumn = r.Data.Nodes[k].Column
+				snip := new(format.SnippetSarif)
+				snip.Text = r.Data.Nodes[k].Name
+				loc.PhysicalLocation.Region.Snippet = snip
+				if !locationSaved { // To avoid overloading log file, we only save the 1st location, or source, as in the webview
+					result.Locations = append(result.Locations, loc)
+					locationSaved = true
+				}
+
+				//Related Locations
+				relatedLocation := *new(format.RelatedLocation)
+				relatedLocation.ID = k + 1
+				relatedLocation.PhysicalLocation = *new(format.RelatedPhysicalLocation)
+				relatedLocation.PhysicalLocation.ArtifactLocation = loc.PhysicalLocation.ArtifactLocation
+				relatedLocation.PhysicalLocation.Region = *new(format.RelatedRegion)
+				relatedLocation.PhysicalLocation.Region.StartLine = loc.PhysicalLocation.Region.StartLine
+				relatedLocation.PhysicalLocation.Region.StartColumn = r.Data.Nodes[k].Column
+				result.RelatedLocations = append(result.RelatedLocations, relatedLocation)
+
+				threadFlowLocation := *new(format.Locations)
+				tfloc := new(format.Location)
+				tfloc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName
+				// remove absolute path of file name (coming from JSON format)
+				if len(r.Data.Nodes[0].FileName) > 0 && r.Data.Nodes[0].FileName[0:1] == "/" {
+					loc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName[1:]
+				}
+				tfloc.PhysicalLocation.Region.StartLine = r.Data.Nodes[k].Line
+				tfloc.PhysicalLocation.Region.EndLine = r.Data.Nodes[k].Line
+				tfloc.PhysicalLocation.Region.StartColumn = r.Data.Nodes[k].Column
+				tfloc.PhysicalLocation.Region.Snippet = snip
+				threadFlowLocation.Location = tfloc
+				threadflow.Locations = append(threadflow.Locations, threadFlowLocation)
 			}
-			loc.PhysicalLocation.Region.StartLine = r.Data.Nodes[k].Line
-			loc.PhysicalLocation.Region.EndLine = r.Data.Nodes[k].Line
-			loc.PhysicalLocation.Region.StartColumn = r.Data.Nodes[k].Column
-			snip := new(format.SnippetSarif)
-			snip.Text = r.Data.Nodes[k].Name
+		case "kics":
+			loc := *new(format.Location)
+
+			filename := r.Data.Filename
+			// remove absolute path of file name (coming from JSON format)
+			if len(filename) > 0 && filename[0:1] == "/" {
+				filename = filename[1:]
+			}
+
+			loc.PhysicalLocation.ArtifactLocation.URI = filename
+			loc.PhysicalLocation.Region.StartLine = r.Data.Line
+			loc.PhysicalLocation.Region.EndLine = r.Data.Line
+			loc.PhysicalLocation.Region.StartColumn = 0 // no column in IAC
+			snip := new(format.SnippetSarif)            // TODO: review the snippet for different IAC findings
+			snip.Text = r.Data.Value
 			loc.PhysicalLocation.Region.Snippet = snip
 			if !locationSaved { // To avoid overloading log file, we only save the 1st location, or source, as in the webview
 				result.Locations = append(result.Locations, loc)
@@ -85,39 +142,34 @@ func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResul
 
 			//Related Locations
 			relatedLocation := *new(format.RelatedLocation)
-			relatedLocation.ID = k + 1
+			relatedLocation.ID = 1
 			relatedLocation.PhysicalLocation = *new(format.RelatedPhysicalLocation)
 			relatedLocation.PhysicalLocation.ArtifactLocation = loc.PhysicalLocation.ArtifactLocation
 			relatedLocation.PhysicalLocation.Region = *new(format.RelatedRegion)
 			relatedLocation.PhysicalLocation.Region.StartLine = loc.PhysicalLocation.Region.StartLine
-			relatedLocation.PhysicalLocation.Region.StartColumn = r.Data.Nodes[k].Column
+			relatedLocation.PhysicalLocation.Region.StartColumn = 0
 			result.RelatedLocations = append(result.RelatedLocations, relatedLocation)
 
 			threadFlowLocation := *new(format.Locations)
 			tfloc := new(format.Location)
-			tfloc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName
-			// remove absolute path of file name (coming from JSON format)
-			if len(r.Data.Nodes[0].FileName) > 0 && r.Data.Nodes[0].FileName[0:1] == "/" {
-				loc.PhysicalLocation.ArtifactLocation.URI = r.Data.Nodes[0].FileName[1:]
-			}
-			tfloc.PhysicalLocation.Region.StartLine = r.Data.Nodes[k].Line
-			tfloc.PhysicalLocation.Region.EndLine = r.Data.Nodes[k].Line
-			tfloc.PhysicalLocation.Region.StartColumn = r.Data.Nodes[k].Column
+			tfloc.PhysicalLocation.ArtifactLocation.URI = filename
+			tfloc.PhysicalLocation.Region.StartLine = r.Data.Line
+			tfloc.PhysicalLocation.Region.EndLine = r.Data.Line
+			tfloc.PhysicalLocation.Region.StartColumn = 0
 			tfloc.PhysicalLocation.Region.Snippet = snip
 			threadFlowLocation.Location = tfloc
 			threadflow.Locations = append(threadflow.Locations, threadFlowLocation)
-
 		}
 		codeflow.ThreadFlows = append(codeflow.ThreadFlows, threadflow)
 		result.CodeFlows = append(result.CodeFlows, codeflow)
 
-		result.PartialFingerprints.CheckmarxSimilarityID = simidString
-		result.PartialFingerprints.PrimaryLocationLineHash = simidString
+		result.PartialFingerprints.CheckmarxSimilarityID = r.SimilarityID
+		result.PartialFingerprints.PrimaryLocationLineHash = r.SimilarityID
 
 		//Properties
 		props := new(format.SarifProperties)
 		props.Audited = false
-		props.CheckmarxSimilarityID = simidString
+		props.CheckmarxSimilarityID = r.SimilarityID
 		props.InstanceID = r.ResultID // no more PathID in cx1
 		props.ToolSeverity = r.Severity
 
@@ -193,7 +245,7 @@ func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResul
 			log.Entry().Warningf("Error while retrieving result predicates: %s", err)
 		}*/
 
-		props.RuleGUID = fmt.Sprintf("%d", r.Data.QueryID)
+		props.RuleGUID = queryID
 		props.UnifiedAuditState = ""
 		result.Properties = props
 
