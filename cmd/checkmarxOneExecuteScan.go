@@ -1229,7 +1229,7 @@ func (c *checkmarxOneExecuteScanHelper) getDetailedResults(scan *checkmarxOne.Sc
 		resultMap["FilesScanned"] = scanmeta.SAST.FileCount
 	} else {
 		resultMap["ScanType"] = "Full"
-		resultMap["Preset"] = "n/a"
+		resultMap["SastPreset"] = "n/a"
 
 		resultMap["LinesOfCodeScanned"] = 0
 		resultMap["FilesScanned"] = 0
