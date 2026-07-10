@@ -250,12 +250,6 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 
 func Authenticate(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteScanInflux) (checkmarxOneExecuteScanHelper, error) {
 	client := &piperHttp.Client{}
-	proxyUrl, _ := url.Parse("http://127.0.0.1:8080")
-	client.SetOptions(piperHttp.ClientOptions{
-		TransportSkipVerification: true,
-		TransportProxy:            proxyUrl,
-	})
-
 	ctx, ghClient, err := piperGithub.NewClientBuilder(config.GithubToken, config.GithubAPIURL).Build()
 	if err != nil {
 		log.Entry().WithError(err).Warning("Failed to get GitHub client")
@@ -342,7 +336,7 @@ func (c *checkmarxOneExecuteScanHelper) GetApplicationByID(applicationId string)
 }
 
 func (c *checkmarxOneExecuteScanHelper) CreateProject() (*checkmarxOne.Project, error) {
-	if len(c.config.SastPreset) == 0 {
+	if c.ScanSAST && len(c.config.SastPreset) == 0 {
 		return nil, fmt.Errorf("Preset is required to create a project")
 	}
 
@@ -367,19 +361,33 @@ func (c *checkmarxOneExecuteScanHelper) CreateProject() (*checkmarxOne.Project, 
 	log.Entry().Infof("Project %v created", project.ProjectID)
 
 	// new project, set the defaults per pipeline config
-	err = c.sys.SetProjectSASTPreset(project.ProjectID, c.config.SastPreset, true)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to set preset for project %v to %v: %s", project.ProjectID, c.config.SastPreset, err)
-	}
-	log.Entry().Infof("Project preset updated to %v", c.config.SastPreset)
-
-	if len(c.config.LanguageMode) != 0 {
-		err = c.sys.SetProjectLanguageMode(project.ProjectID, c.config.LanguageMode, true)
+	if c.ScanSAST {
+		err = c.sys.SetProjectSASTPreset(project.ProjectID, c.config.SastPreset, true)
 		if err != nil {
-
-			return nil, fmt.Errorf("Unable to set languageMode for project %v to %v: %s", project.ProjectID, c.config.LanguageMode, err)
+			return nil, fmt.Errorf("Unable to set SAST preset for project %v to %v: %s", project.ProjectID, c.config.SastPreset, err)
 		}
-		log.Entry().Infof("Project languageMode updated to %v", c.config.LanguageMode)
+		log.Entry().Infof("Project SAST preset updated to %v", c.config.SastPreset)
+
+		// TODO: set sast defaults even for non-sast scan?
+		if len(c.config.LanguageMode) != 0 {
+			err = c.sys.SetProjectLanguageMode(project.ProjectID, c.config.LanguageMode, true)
+			if err != nil {
+
+				return nil, fmt.Errorf("Unable to set SAST languageMode for project %v to %v: %s", project.ProjectID, c.config.LanguageMode, err)
+			}
+			log.Entry().Infof("Project languageMode updated to %v", c.config.LanguageMode)
+		}
+	}
+
+	if c.ScanIAC {
+		if c.config.IacPreset != "" {
+			err = c.sys.SetProjectIACPreset(project.ProjectID, c.config.IacPreset, true)
+
+			if err != nil {
+				return nil, fmt.Errorf("Unable to set IAC preset for project %v to %v: %s", project.ProjectID, c.config.IacPreset, err)
+			}
+			log.Entry().Infof("Project IAC preset updated to %v", c.config.IacPreset)
+		}
 	}
 
 	return &project, nil
@@ -517,12 +525,7 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 			c.config.IacPreset = currentIACPreset
 		} else if currentIACPreset != c.config.IacPreset {
 			log.Entry().Infof("Project configured IAC preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentIACPreset, c.config.IacPreset)
-			newPresetID, err := c.sys.GetIACPresetIDByName(c.config.IacPreset)
-			if err != nil {
-				return fmt.Errorf("unable to set configured IAC preset '%s': %s", c.config.IacPreset, newPresetID)
-			}
-			c.sys.SetProjectIACPreset(c.Project.ProjectID, newPresetID, true)
-
+			c.sys.SetProjectIACPreset(c.Project.ProjectID, c.config.IacPreset, true)
 			if c.config.Incremental {
 				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
 				c.config.Incremental = false
@@ -677,6 +680,12 @@ func (c *checkmarxOneExecuteScanHelper) CreateScanRequest(incremental bool, uplo
 			sastConfigString = sastConfigString + fmt.Sprintf(", languageMode %v", c.config.LanguageMode)
 		}
 
+		if c.config.SastFilterPattern != "" {
+			sastConfigString += fmt.Sprintf(", file filter %s", c.config.SastFilterPattern)
+		} else {
+			sastConfigString += ", no files filtered"
+		}
+
 		configs = append(configs, sastConfig)
 		configStrings = append(configStrings, sastConfigString)
 	}
@@ -695,6 +704,12 @@ func (c *checkmarxOneExecuteScanHelper) CreateScanRequest(incremental bool, uplo
 			iacConfig.Values["presetId"] = presetId
 		}
 		iacConfigString += fmt.Sprintf("preset %s", c.config.IacPreset)
+
+		if c.config.IacFilterPattern != "" {
+			iacConfigString += fmt.Sprintf(", file filter %s", c.config.IacFilterPattern)
+		} else {
+			iacConfigString += ", no files filtered"
+		}
 
 		configs = append(configs, iacConfig)
 		configStrings = append(configStrings, iacConfigString)

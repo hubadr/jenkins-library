@@ -1099,7 +1099,7 @@ func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
 		return "", nil
 	}
 	type IACPreset struct {
-		PresetID string
+		PresetID string `json:"id"`
 		Name     string
 	}
 	var preset_response struct {
@@ -1205,7 +1205,7 @@ func (sys *SystemInstance) SetProjectBranch(projectID, branch string, allowOverr
 
 func (sys *SystemInstance) SetProjectSASTPreset(projectID, presetName string, allowOverride bool) error {
 	var setting ProjectConfigurationSetting
-	setting.Key = "scan.config.sast.presetName"
+	setting.Key = ConfigurationKeys.SAST.PresetName
 	setting.Value = presetName
 	setting.AllowOverride = allowOverride
 
@@ -1213,7 +1213,7 @@ func (sys *SystemInstance) SetProjectSASTPreset(projectID, presetName string, al
 }
 func (sys *SystemInstance) SetProjectIACPreset(projectID, presetName string, allowOverride bool) error {
 	var setting ProjectConfigurationSetting
-	setting.Key = "scan.config.kics.presetName"
+	setting.Key = ConfigurationKeys.IAC.PresetID
 	presetId, err := sys.GetIACPresetIDByName(presetName)
 	if err != nil {
 		return err
@@ -1226,7 +1226,7 @@ func (sys *SystemInstance) SetProjectIACPreset(projectID, presetName string, all
 
 func (sys *SystemInstance) SetProjectLanguageMode(projectID, languageMode string, allowOverride bool) error {
 	var setting ProjectConfigurationSetting
-	setting.Key = "scan.config.sast.languageMode"
+	setting.Key = ConfigurationKeys.SAST.LanguageMode
 	setting.Value = languageMode
 	setting.AllowOverride = allowOverride
 
@@ -1235,7 +1235,7 @@ func (sys *SystemInstance) SetProjectLanguageMode(projectID, languageMode string
 
 func (sys *SystemInstance) SetProjectSASTFileFilter(projectID, filter string, allowOverride bool) error {
 	var setting ProjectConfigurationSetting
-	setting.Key = "scan.config.sast.filter"
+	setting.Key = ConfigurationKeys.SAST.FileFilter
 	setting.Value = filter
 	setting.AllowOverride = allowOverride
 
@@ -1246,7 +1246,7 @@ func (sys *SystemInstance) SetProjectSASTFileFilter(projectID, filter string, al
 
 func (sys *SystemInstance) SetProjectIACFileFilter(projectID, filter string, allowOverride bool) error {
 	var setting ProjectConfigurationSetting
-	setting.Key = "scan.config.kics.filter"
+	setting.Key = ConfigurationKeys.IAC.FileFilter
 	setting.Value = filter
 	setting.AllowOverride = allowOverride
 	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
