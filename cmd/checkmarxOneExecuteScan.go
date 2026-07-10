@@ -229,7 +229,7 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 
 	// TODO: how to provide other scan parameters like engineConfiguration?
 	// TODO: potential to persist file exclusions for git?
-	err = cx1sh.PollScanStatus(scan)
+	scan, err = cx1sh.PollScanStatus(scan)
 	if err != nil {
 		return fmt.Errorf("failed while polling scan status: %s", err)
 	}
@@ -738,22 +738,24 @@ func (c *checkmarxOneExecuteScanHelper) CreateScanRequest(incremental bool, uplo
 	return &scan, nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) PollScanStatus(scan *checkmarxOne.Scan) error {
+func (c *checkmarxOneExecuteScanHelper) PollScanStatus(scan *checkmarxOne.Scan) (*checkmarxOne.Scan, error) {
 	statusDetails := "Scan phase: New"
 	pastStatusDetails := statusDetails
 	log.Entry().Info(statusDetails)
 	status := "New"
+	var scan_refresh checkmarxOne.Scan
+	var err error
 	for {
-		scan_refresh, err := c.sys.GetScan(scan.ScanID)
+		scan_refresh, err = c.sys.GetScan(scan.ScanID)
 
 		if err != nil {
-			return fmt.Errorf("Error while polling scan %v: %s", scan.ScanID, err)
+			return nil, fmt.Errorf("Error while polling scan %v: %s", scan.ScanID, err)
 		}
 
 		status = scan_refresh.Status
 		workflow, err := c.sys.GetScanWorkflow(scan.ScanID)
 		if err != nil {
-			return fmt.Errorf("Error while getting workflow for scan %v: %s", scan.ScanID, err)
+			return nil, fmt.Errorf("Error while getting workflow for scan %v: %s", scan.ScanID, err)
 		}
 
 		statusDetails = workflow[len(workflow)-1].Info
@@ -778,12 +780,12 @@ func (c *checkmarxOneExecuteScanHelper) PollScanStatus(scan *checkmarxOne.Scan) 
 	}
 	if status == "Canceled" {
 		log.SetErrorCategory(log.ErrorCustom)
-		return fmt.Errorf("Scan %v canceled via web interface", scan.ScanID)
+		return nil, fmt.Errorf("Scan %v canceled via web interface", scan.ScanID)
 	}
 	if status == "Failed" {
-		return fmt.Errorf("Checkmarx One scan failed with the following error: %v", statusDetails)
+		return nil, fmt.Errorf("Checkmarx One scan failed with the following error: %v", statusDetails)
 	}
-	return nil
+	return &scan_refresh, nil
 }
 
 func (c *checkmarxOneExecuteScanHelper) PostScanSummaryInPullRequest(detailedResults *map[string]interface{}, insecure bool) error {

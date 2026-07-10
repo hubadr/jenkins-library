@@ -1308,7 +1308,21 @@ func (sys *SystemInstance) GetScanMetadata(scan *Scan) (ScanMetadata, error) {
 	if slices.Contains(scan.Engines, "sast") {
 		meta, err := sys.GetScanSASTMetadata(scan.ScanID)
 		if err != nil {
-			return scanmeta, err
+			details := scan.GetStatusDetails("sast")
+			if details != nil && (details.Status == "Completed" || details.Status == "Failed") {
+				scanmeta.SAST = &ScanSASTMetadata{
+					ScanID:                scan.ScanID,
+					ProjectID:             scan.ProjectID,
+					LOC:                   0,
+					FileCount:             0,
+					IsIncremental:         false,
+					IsIncrementalCanceled: false,
+					PresetName:            "",
+				}
+				return scanmeta, nil
+			} else {
+				return scanmeta, err
+			}
 		}
 		scanmeta.SAST = &meta
 	}
@@ -1495,6 +1509,15 @@ func (s *Scan) IsIncremental() (bool, error) {
 		}
 	}
 	return false, fmt.Errorf("Scan %v did not have a sast-engine incremental flag set", s.ScanID)
+}
+
+func (s *Scan) GetStatusDetails(engine string) *ScanStatusDetails {
+	for _, detail := range s.StatusDetails {
+		if detail.Name == engine {
+			return &detail
+		}
+	}
+	return nil
 }
 
 func (sys *SystemInstance) GetScanResults(scanID string, limit uint64) ([]ScanResult, error) {
