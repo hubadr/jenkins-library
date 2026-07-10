@@ -173,13 +173,23 @@ type ScanSASTMetadata struct {
 	PresetName            string `json:"queryPreset"`
 }
 
+type scanresultQueryID struct {
+	Value any // uint64 for sast, string for iac
+}
+
 type ScanResultData struct {
-	QueryID      string
-	QueryName    string
-	Group        string
-	ResultHash   string
-	LanguageName string
-	Nodes        []ScanResultNodes
+	QueryID      scanresultQueryID
+	QueryName    string            // SAST and IaC
+	Group        string            // SAST and IaC
+	ResultHash   string            // only SAST
+	LanguageName string            // only SAST
+	Nodes        []ScanResultNodes // only SAST
+
+	Platform      string // only IAC
+	Line          int    // only IAC
+	Filename      string // only IAC
+	Value         string // only IAC
+	ExpectedValue string // only IAC
 }
 
 type ScanResultNodes struct {
@@ -201,6 +211,7 @@ type ScanResultNodes struct {
 type ScanResult struct {
 	Type                 string
 	ResultID             string `json:"id"`
+	AlternateID          string
 	SimilarityID         string
 	Status               string
 	State                string
@@ -215,7 +226,7 @@ type ScanResult struct {
 }
 
 type ScanResultDetails struct {
-	CweId       int
+	CweId       int // empty for kics results, pending case 283343
 	Compliances []string
 }
 
@@ -1778,4 +1789,26 @@ func versionStringToInts(version string) []int64 {
 		ints[id], _ = strconv.ParseInt(val, 10, 64)
 	}
 	return ints
+}
+
+func (q *scanresultQueryID) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	if data[0] == '"' {
+		var s string
+		if err := json.Unmarshal(data, &s); err != nil {
+			return err
+		}
+		q.Value = strings.TrimSuffix(s, " [Taken from query_id]")
+		return nil
+	}
+
+	var u uint64
+	if err := json.Unmarshal(data, &u); err != nil {
+		return err
+	}
+	q.Value = u
+	return nil
 }
