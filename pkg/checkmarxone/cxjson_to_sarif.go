@@ -11,7 +11,26 @@ import (
 )
 
 // ConvertCxJSONToSarif is the entrypoint for the Parse function
-func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scanMeta *ScanSASTMetadata, scan *Scan) (format.SARIF, error) {
+func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, _ ScanSASTMetadata, scan *Scan) (format.SARIF, error) {
+	return ConvertCxSASTJSONToSarif(sys, serverURL, scanResults, scan)
+}
+
+func ConvertCxSASTJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scan *Scan) (format.SARIF, error) {
+	baseURL := serverURL + "/results/" + scan.ScanID + "/" + scan.ProjectID
+	projectBaseURL := serverURL + "/projects/" + scan.ProjectID + "/"
+
+	return convertCxJSONToSarif("sast", baseURL, projectBaseURL, scanResults, scan)
+}
+
+// ConvertCxSASTJSONToSarif is the entrypoint for the Parse function
+func ConvertCxIACJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scan *Scan) (format.SARIF, error) {
+	baseURL := serverURL + "/results/" + scan.ScanID + "/" + scan.ProjectID
+	projectBaseURL := serverURL + "/projects/" + scan.ProjectID + "/"
+
+	return convertCxJSONToSarif("kics", baseURL, projectBaseURL, scanResults, scan)
+}
+
+func convertCxJSONToSarif(resultType, baseURL, projectBaseURL string, scanResults *[]ScanResult, scan *Scan) (format.SARIF, error) {
 	// Process sarif
 	start := time.Now()
 
@@ -24,9 +43,6 @@ func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResul
 	sarif.Runs = append(sarif.Runs, checkmarxRun)
 	rulesArray := []format.SarifRule{}
 
-	baseURL := serverURL + "/results/" + scanMeta.ScanID + "/" + scanMeta.ProjectID
-	projectBaseURL := serverURL + "/projects/" + scanMeta.ProjectID + "/"
-
 	cweIdsForTaxonomies := make(map[int]int) //use a map to avoid duplicates
 	cweCounter := 0
 	//maxretries := 5
@@ -37,6 +53,10 @@ func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResul
 	log.Entry().Debug("[SARIF] Now handling results.")
 
 	for _, r := range *scanResults {
+		if resultType != r.Type {
+			continue
+		}
+
 		_, haskey := cweIdsForTaxonomies[r.VulnerabilityDetails.CweId]
 
 		if !haskey {
@@ -262,7 +282,11 @@ func ConvertCxJSONToSarif(sys System, serverURL string, scanResults *[]ScanResul
 		}
 		rule.Name = strings.Join(words, "")
 
-		rule.HelpURI = fmt.Sprintf("%v/sast/description/%v/%v", baseURL, r.VulnerabilityDetails.CweId, r.Data.QueryID)
+		if r.Type == "sast" {
+			rule.HelpURI = fmt.Sprintf("%v/sast/description/%v/%v", baseURL, r.VulnerabilityDetails.CweId, r.Data.QueryID)
+		} else {
+			rule.HelpURI = "n/a" // TODO: offsite links to kics docs eg https://docs.kics.io/2.1.20/queries/crossplane-queries/gcp/b4f65d13-a609-4dc1-af7c-63d2e08bffe9/
+		}
 		rule.Help = new(format.Help)
 		rule.Help.Text = rule.HelpURI
 		rule.ShortDescription = new(format.Message)

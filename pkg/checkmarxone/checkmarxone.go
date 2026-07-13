@@ -1139,7 +1139,7 @@ func (sys *SystemInstance) GetIACPresetNameByID(id string) (string, error) {
 		return iacDefaultBlankPreset, nil
 	}
 	var preset struct {
-		PresetID string
+		PresetID string `json:"id"`
 		Name     string
 	}
 
@@ -1149,7 +1149,7 @@ func (sys *SystemInstance) GetIACPresetNameByID(id string) (string, error) {
 	}
 
 	err = json.Unmarshal(response, &preset)
-	return preset.PresetID, err
+	return preset.Name, err
 }
 
 func (sys *SystemInstance) GetProjectConfiguration(projectID string) ([]ProjectConfigurationSetting, error) {
@@ -1304,13 +1304,17 @@ func (sys *SystemInstance) GetScanMetadata(scan *Scan) (ScanMetadata, error) {
 			return scanmeta, err
 		}
 		scanmeta.IAC = &meta
+
+		if scanmeta.IAC.IACLOC == 0 {
+			sys.logger.Warnf("IAC scan %s shows 0 lines of code scanned.", scan.ScanID)
+		}
 	}
 	if slices.Contains(scan.Engines, "sast") {
 		meta, err := sys.GetScanSASTMetadata(scan.ScanID)
 		if err != nil {
 			details := scan.GetStatusDetails("sast")
 			if details != nil && (details.Status == "Completed" || details.Status == "Failed") {
-				scanmeta.SAST = &ScanSASTMetadata{
+				meta = ScanSASTMetadata{
 					ScanID:                scan.ScanID,
 					ProjectID:             scan.ProjectID,
 					LOC:                   0,
@@ -1319,13 +1323,16 @@ func (sys *SystemInstance) GetScanMetadata(scan *Scan) (ScanMetadata, error) {
 					IsIncrementalCanceled: false,
 					PresetName:            "",
 				}
-				return scanmeta, nil
 			} else {
 				return scanmeta, err
 			}
 		}
 		scanmeta.SAST = &meta
+		if scanmeta.SAST.LOC == 0 {
+			sys.logger.Warnf("SAST scan %s shows 0 lines of code scanned.", scan.ScanID)
+		}
 	}
+
 	return scanmeta, nil
 }
 
