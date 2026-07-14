@@ -1476,30 +1476,6 @@ func (sys *SystemInstance) GetScanIACMetadata(scanID string) (ScanIACMetadata, e
 	return scanmeta, nil
 }
 
-/*
-
-	scanconfig, err := sys.GetScanConfiguration(scan.ProjectID, scan.ScanID)
-	if err != nil {
-		return scanmeta, err
-	}
-
-	iacPresetID, ok := scanconfig[checkmarxOne.ConfigurationKeys.IAC.PresetID]
-	if !ok || iacPresetID == "" {
-		scanmeta.IACPresetName = iacDefaultBlankPreset
-		scanmeta.IACPresetID = iacDefaultBlankPreset
-	} else {
-		scanmeta.IACPresetID = iacPresetID
-		iacPresetName, err := sys.GetIACPresetNameByID(iacPresetID)
-		if err != nil {
-			log.Entry().Warningf("Failed to identify IAC preset with ID %s: %s", iacPresetID, err)
-			scanmeta.IACPresetName = "unknown preset " + iacPresetID
-		} else {
-			scanmeta.IACPresetName = iacPresetName
-		}
-
-	}
-*/
-
 func (sys *SystemInstance) GetScanWorkflow(scanID string) ([]WorkflowLog, error) {
 	var workflow []WorkflowLog
 
