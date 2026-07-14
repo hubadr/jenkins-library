@@ -176,7 +176,7 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 		return fmt.Errorf("failed to determine incremental or full scan configuration: %s", err)
 	}
 
-	if config.Incremental {
+	if config.Incremental && cx1sh.ScanSAST {
 		log.Entry().Info("If you change your file filter pattern it is recommended to run a Full scan instead of an incremental, to ensure full code coverage.")
 	}
 
@@ -1014,7 +1014,7 @@ func (c *checkmarxOneExecuteScanHelper) GetReportSASTSARIF(scan *checkmarxOne.Sc
 func (c *checkmarxOneExecuteScanHelper) GetReportIACSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
 	if c.config.ConvertToSarif {
 		if scanmeta.IAC != nil {
-			log.Entry().Info("Calling SAST JSON conversion to SARIF function.")
+			log.Entry().Info("Calling IAC JSON conversion to SARIF function.")
 			sarif, err := checkmarxOne.ConvertCxIACJSONToSarif(c.sys, c.config.ServerURL, results, scan)
 			if err != nil {
 				return fmt.Errorf("Failed to generate SARIF: %s", err)

@@ -1709,6 +1709,9 @@ func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string, engines
 	if len(engines) == 0 {
 		return "", fmt.Errorf("no engines specified for report")
 	}
+
+	engineAndType := strings.ToUpper(fmt.Sprintf("%s %s", engines[0], reportType))
+
 	jsonData := map[string]interface{}{
 		"reportName": "improved-scan-report",
 		"entities": []map[string]interface{}{
@@ -1744,9 +1747,9 @@ func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string, engines
 	header.Set("Content-Type", "application/json")
 	data, err := sendRequest(sys, http.MethodPost, "/reports/v2", bytes.NewBuffer(jsonValue), header, []int{})
 	if err != nil {
-		return "", fmt.Errorf("Failed to trigger %+s report generation for scan %v: %w", engines, scanID, err)
+		return "", fmt.Errorf("Failed to trigger %s report generation for scan %v: %w", engineAndType, scanID, err)
 	} else {
-		sys.logger.Infof("Generating %s %s report %v", engines[0], reportType, string(data))
+		sys.logger.Infof("Generating %s report %v", engineAndType, string(data))
 	}
 
 	var reportResponse struct {
