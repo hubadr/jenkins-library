@@ -22,7 +22,6 @@ func ConvertCxSASTJSONToSarif(sys System, serverURL string, scanResults *[]ScanR
 	return convertCxJSONToSarif(sys, "sast", baseURL, projectBaseURL, scanResults, scan)
 }
 
-// ConvertCxSASTJSONToSarif is the entrypoint for the Parse function
 func ConvertCxIACJSONToSarif(sys System, serverURL string, scanResults *[]ScanResult, scan *Scan) (format.SARIF, error) {
 	baseURL := serverURL + "/results/" + scan.ScanID + "/" + scan.ProjectID
 	projectBaseURL := serverURL + "/projects/" + scan.ProjectID + "/"
