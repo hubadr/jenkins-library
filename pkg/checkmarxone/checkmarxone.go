@@ -1330,6 +1330,14 @@ func (sys *SystemInstance) SetProjectIACFileFilter(projectID, filter string, all
 	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
 }
 
+func (sys *SystemInstance) SetProjectIACFileFilter(projectID, filter string, allowOverride bool) error {
+	var setting ProjectConfigurationSetting
+	setting.Key = ConfigurationKeys.IAC.FileFilter
+	setting.Value = filter
+	setting.AllowOverride = allowOverride
+	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
+}
+
 // GetScans returns all scan status on the project addressed by projectID
 func (sys *SystemInstance) GetScan(scanID string) (Scan, error) {
 	var scan Scan
@@ -1847,6 +1855,28 @@ func (sys *SystemInstance) GetVersion() (VersionInfo, error) {
 
 	sys.version = &version
 	return version, nil
+}
+
+func (s ScanMetadata) TotalLOC() int {
+	total := 0
+	if s.SAST != nil {
+		total += s.SAST.LOC
+	}
+	if s.IAC != nil {
+		total += s.IAC.IACLOC
+	}
+	return total
+}
+
+func (s ScanMetadata) TotalFiles() int {
+	total := 0
+	if s.SAST != nil {
+		total += s.SAST.FileCount
+	}
+	if s.IAC != nil {
+		total += s.IAC.FileCount
+	}
+	return total
 }
 
 func (s ScanMetadata) TotalLOC() int {
