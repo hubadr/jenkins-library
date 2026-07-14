@@ -23,7 +23,7 @@ import (
 // ReportsDirectory defines the subfolder for the Checkmarx reports which are generated
 const ReportsDirectory = "checkmarxOne"
 const cxOrigin = ""
-const iacDefaultBlankPreset = "default all"
+const IACDefaultBlankPreset = "all checks"
 
 // AuthToken - Structure to store OAuth2 token
 // Updated for Cx1
@@ -1103,7 +1103,7 @@ func (sys *SystemInstance) GetPresets() ([]Preset, error) {
 */
 
 func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
-	if name == iacDefaultBlankPreset {
+	if name == IACDefaultBlankPreset {
 		return "", nil
 	}
 	type IACPreset struct {
@@ -1144,7 +1144,7 @@ func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
 
 func (sys *SystemInstance) GetIACPresetNameByID(id string) (string, error) {
 	if id == "" {
-		return iacDefaultBlankPreset, nil
+		return IACDefaultBlankPreset, nil
 	}
 	var preset struct {
 		PresetID string `json:"id"`
@@ -1171,7 +1171,6 @@ func (sys *SystemInstance) GetIACFindingInfo(r ScanResult) (IACFindingInfo, erro
 			}
 			for id, info := range family {
 				sys.iacQueryCache[id] = info
-				fmt.Printf("Added query %s to cache: %+v\n", id, info)
 			}
 
 			if info, ok := sys.iacQueryCache[queryId]; ok {
@@ -1485,30 +1484,6 @@ func (sys *SystemInstance) GetScanIACMetadata(scanID string) (ScanIACMetadata, e
 	return scanmeta, nil
 }
 
-/*
-
-	scanconfig, err := sys.GetScanConfiguration(scan.ProjectID, scan.ScanID)
-	if err != nil {
-		return scanmeta, err
-	}
-
-	iacPresetID, ok := scanconfig[checkmarxOne.ConfigurationKeys.IAC.PresetID]
-	if !ok || iacPresetID == "" {
-		scanmeta.IACPresetName = iacDefaultBlankPreset
-		scanmeta.IACPresetID = iacDefaultBlankPreset
-	} else {
-		scanmeta.IACPresetID = iacPresetID
-		iacPresetName, err := sys.GetIACPresetNameByID(iacPresetID)
-		if err != nil {
-			log.Entry().Warningf("Failed to identify IAC preset with ID %s: %s", iacPresetID, err)
-			scanmeta.IACPresetName = "unknown preset " + iacPresetID
-		} else {
-			scanmeta.IACPresetName = iacPresetName
-		}
-
-	}
-*/
-
 func (sys *SystemInstance) GetScanWorkflow(scanID string) ([]WorkflowLog, error) {
 	var workflow []WorkflowLog
 
@@ -1774,9 +1749,9 @@ func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string, engines
 	header.Set("Content-Type", "application/json")
 	data, err := sendRequest(sys, http.MethodPost, "/reports/v2", bytes.NewBuffer(jsonValue), header, []int{})
 	if err != nil {
-		return "", fmt.Errorf("Failed to trigger report generation for scan %v: %w", scanID, err)
+		return "", fmt.Errorf("Failed to trigger %+s report generation for scan %v: %w", engines, scanID, err)
 	} else {
-		sys.logger.Infof("Generating report %v", string(data))
+		sys.logger.Infof("Generating %+s report %v", engines, string(data))
 	}
 
 	var reportResponse struct {
@@ -1856,28 +1831,6 @@ func (sys *SystemInstance) GetVersion() (VersionInfo, error) {
 
 	sys.version = &version
 	return version, nil
-}
-
-func (s ScanMetadata) TotalLOC() int {
-	total := 0
-	if s.SAST != nil {
-		total += s.SAST.LOC
-	}
-	if s.IAC != nil {
-		total += s.IAC.IACLOC
-	}
-	return total
-}
-
-func (s ScanMetadata) TotalFiles() int {
-	total := 0
-	if s.SAST != nil {
-		total += s.SAST.FileCount
-	}
-	if s.IAC != nil {
-		total += s.IAC.FileCount
-	}
-	return total
 }
 
 func (s ScanMetadata) TotalLOC() int {

@@ -480,8 +480,13 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 			log.Entry().Infof("Project is already configured to use pipeline SAST preset %v", currentSASTPreset)
 		}
 
+		filterStr := currentSASTFilter
+		if filterStr == "" {
+			filterStr = "no filter"
+		}
+
 		if c.config.SastFilterPattern == "" {
-			log.Entry().Infof("Pipeline yaml does not specify a SAST file filter, will use project configuration (%v).", currentSASTFilter)
+			log.Entry().Infof("Pipeline yaml does not specify a SAST file filter, will use project configuration (%v).", filterStr)
 			c.config.SastFilterPattern = currentSASTFilter
 		} else if currentSASTFilter != c.config.SastFilterPattern {
 			log.Entry().Infof("Project configured SAST file filter (%v) does not match pipeline yaml (%v) - updating project configuration.", currentSASTFilter, c.config.SastFilterPattern)
@@ -492,32 +497,36 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 				c.config.Incremental = false
 			}
 		} else {
-			log.Entry().Infof("Project is already configured to use pipeline SAST file filter %v", currentSASTFilter)
+			log.Entry().Infof("Project is already configured to use pipeline SAST file filter %v", filterStr)
 		}
 	}
 
 	if c.ScanIAC {
+		presetStr := currentIACPreset
+		if presetStr == "" {
+			presetStr = "all checks"
+		}
 		if c.config.IacPreset == "" {
 			if currentIACPreset == "" {
 				//return fmt.Errorf("must specify the IAC preset in either the pipeline yaml or in the CheckmarxOne project configuration")
-				log.Entry().Infof("No IAC preset is set - using default (all checks)")
+				log.Entry().Infof("No IAC preset is set - using default (%s)", checkmarxOne.IACDefaultBlankPreset)
 			} else {
-				log.Entry().Infof("Pipeline yaml does not specify a IAC preset, will use project configuration (%v).", currentIACPreset)
+				log.Entry().Infof("Pipeline yaml does not specify a IAC preset, will use project configuration (%v).", presetStr)
 			}
 			c.config.IacPreset = currentIACPreset
 		} else if currentIACPreset != c.config.IacPreset {
 			log.Entry().Infof("Project configured IAC preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentIACPreset, c.config.IacPreset)
 			c.sys.SetProjectIACPreset(c.Project.ProjectID, c.config.IacPreset, true)
-			if c.config.Incremental {
-				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
-				c.config.Incremental = false
-			}
 		} else {
-			log.Entry().Infof("Project is already configured to use pipeline IAC preset %v", currentIACPreset)
+			log.Entry().Infof("Project is already configured to use pipeline IAC preset %v", presetStr)
 		}
 
+		filterStr := currentIACFilter
+		if filterStr == "" {
+			filterStr = "no filter"
+		}
 		if c.config.IacFilterPattern == "" {
-			log.Entry().Infof("Pipeline yaml does not specify a IAC file filter, will use project configuration (%v).", currentIACFilter)
+			log.Entry().Infof("Pipeline yaml does not specify a IAC file filter, will use project configuration (%v).", filterStr)
 			c.config.IacFilterPattern = currentIACFilter
 		} else if currentIACFilter != c.config.IacFilterPattern {
 			log.Entry().Infof("Project configured IAC file filter (%v) does not match pipeline yaml (%v) - updating project configuration.", currentIACFilter, c.config.IacFilterPattern)
@@ -528,7 +537,7 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 				c.config.Incremental = false
 			}
 		} else {
-			log.Entry().Infof("Project is already configured to use pipeline IAC file filter %v", currentIACFilter)
+			log.Entry().Infof("Project is already configured to use pipeline IAC file filter %v", filterStr)
 		}
 	}
 	return nil
