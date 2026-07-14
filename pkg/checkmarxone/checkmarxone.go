@@ -230,6 +230,11 @@ type ScanResultDetails struct {
 	Compliances []string
 }
 
+type IACFindingInfo struct {
+	Cwe int
+	URL string
+}
+
 // Cx1: StatusDetails - details of each engine type's scan status for a multi-engine scan
 type ScanStatusDetails struct {
 	Name    string `json:"name"`
@@ -344,6 +349,8 @@ type SystemInstance struct {
 	oauth_client_secret string //separate from APIKey
 	client              piperHttp.Uploader
 	logger              *logrus.Entry
+	version             *VersionInfo              // stored after first fetch
+	iacQueryCache       map[string]IACFindingInfo // map of query-id to finding info, retrieved from the preset-manager api
 }
 
 // System is the interface abstraction of a specific SystemIns
@@ -398,7 +405,7 @@ type System interface {
 
 	GetIACPresetNameByID(presetID string) (string, error)
 	GetIACPresetIDByName(presetName string) (string, error)
-
+	GetIACFindingInfo(r ScanResult) (IACFindingInfo, error)
 	GetProjectConfiguration(projectID string) ([]ProjectConfigurationSetting, error)
 	UpdateProjectConfiguration(projectID string, settings []ProjectConfigurationSetting) error
 
@@ -418,6 +425,7 @@ func NewSystemInstance(client piperHttp.Uploader, serverURL, iamURL, tenant, API
 		oauth_client_secret: client_secret,
 		client:              client,
 		logger:              loggerInstance,
+		iacQueryCache:       make(map[string]IACFindingInfo),
 	}
 
 	var token string
@@ -1152,6 +1160,77 @@ func (sys *SystemInstance) GetIACPresetNameByID(id string) (string, error) {
 	return preset.Name, err
 }
 
+func (sys *SystemInstance) GetIACFindingInfo(r ScanResult) (IACFindingInfo, error) {
+	if queryId, ok := r.Data.QueryID.Value.(string); ok {
+		if info, ok := sys.iacQueryCache[queryId]; ok {
+			return info, nil
+		} else {
+			family, err := sys.GetIACQueryFamily(strings.ToLower(r.Data.Platform))
+			if err != nil {
+				return IACFindingInfo{}, err
+			}
+			for id, info := range family {
+				sys.iacQueryCache[id] = info
+				fmt.Printf("Added query %s to cache: %+v\n", id, info)
+			}
+
+			if info, ok := sys.iacQueryCache[queryId]; ok {
+				return info, nil
+			} else {
+				return IACFindingInfo{}, fmt.Errorf("query with id %s not found", queryId)
+			}
+		}
+	} else {
+		return IACFindingInfo{}, fmt.Errorf("failed to get IAC query ID from: %+v", r.Data.QueryID)
+	}
+}
+
+func (sys *SystemInstance) GetIACQueryFamily(family string) (map[string]IACFindingInfo, error) {
+	response, err := sendRequest(sys, http.MethodGet, fmt.Sprintf("/preset-manager/iac/query-families/%v/queries", family), nil, http.Header{}, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	type iacQueryFamilyLeaf struct {
+		Key  string
+		Data struct {
+			Cwe int
+			URL string
+		}
+	}
+	type iacQueryFamily struct {
+		// Title string
+		// Key string
+		Children []struct {
+			// Title string // group
+			// Key string
+			Children []iacQueryFamilyLeaf
+		}
+	}
+
+	var iacQueryFamilies []iacQueryFamily
+	if err = json.Unmarshal(response, &iacQueryFamilies); err != nil {
+		return nil, err
+	}
+
+	iacFindings := make(map[string]IACFindingInfo)
+
+	for i := range iacQueryFamilies {
+		iacQueries := &iacQueryFamilies[i]
+		for i := range iacQueries.Children {
+			group := &iacQueries.Children[i]
+			for i := range group.Children {
+				query := &group.Children[i]
+				iacFindings[query.Key] = IACFindingInfo{
+					Cwe: query.Data.Cwe,
+					URL: query.Data.URL,
+				}
+			}
+		}
+	}
+	return iacFindings, nil
+}
+
 func (sys *SystemInstance) GetProjectConfiguration(projectID string) ([]ProjectConfigurationSetting, error) {
 	sys.logger.Debug("Getting project configuration")
 	var projectConfigurations []ProjectConfigurationSetting
@@ -1749,6 +1828,10 @@ func (sys *SystemInstance) DownloadReport(reportUrl string) ([]byte, error) {
 }
 
 func (sys *SystemInstance) GetVersion() (VersionInfo, error) {
+	if sys.version != nil {
+		return *sys.version, nil
+	}
+
 	sys.logger.Debug("Getting Version information...")
 	var version VersionInfo
 
@@ -1759,7 +1842,12 @@ func (sys *SystemInstance) GetVersion() (VersionInfo, error) {
 	}
 
 	err = json.Unmarshal(data, &version)
-	return version, err
+	if err != nil {
+		return version, err
+	}
+
+	sys.version = &version
+	return version, nil
 }
 
 func (s ScanMetadata) TotalLOC() int {

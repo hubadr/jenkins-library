@@ -997,7 +997,7 @@ func (c *checkmarxOneExecuteScanHelper) GetReportPDF(scan *checkmarxOne.Scan, en
 	return nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) GetReportSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
+func (c *checkmarxOneExecuteScanHelper) GetReportSASTSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
 	if c.config.ConvertToSarif {
 		if scanmeta.SAST != nil {
 			log.Entry().Info("Calling SAST JSON conversion to SARIF function.")
@@ -1011,6 +1011,12 @@ func (c *checkmarxOneExecuteScanHelper) GetReportSARIF(scan *checkmarxOne.Scan, 
 			}
 			c.reports = append(c.reports, paths...)
 		}
+	}
+	return nil
+}
+
+func (c *checkmarxOneExecuteScanHelper) GetReportIACSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
+	if c.config.ConvertToSarif {
 		if scanmeta.IAC != nil {
 			log.Entry().Info("Calling SAST JSON conversion to SARIF function.")
 			sarif, err := checkmarxOne.ConvertCxIACJSONToSarif(c.sys, c.config.ServerURL, results, scan)
@@ -1091,7 +1097,7 @@ func (c *checkmarxOneExecuteScanHelper) ParseResults(scan *checkmarxOne.Scan) (m
 		if err != nil {
 			log.Entry().WithError(err).Warnf("Failed to get PDF SAST report")
 		}
-		err = c.GetReportSARIF(scan, &scanmeta, &results)
+		err = c.GetReportSASTSARIF(scan, &scanmeta, &results)
 		if err != nil {
 			log.Entry().WithError(err).Warnf("Failed to get SARIF SAST report")
 		}
@@ -1106,10 +1112,10 @@ func (c *checkmarxOneExecuteScanHelper) ParseResults(scan *checkmarxOne.Scan) (m
 		if err != nil {
 			log.Entry().WithError(err).Warnf("Failed to get PDF IAC report")
 		}
-		/*err = c.GetReportSARIF(scan, scanmeta.SAST, &results)
+		err = c.GetReportIACSARIF(scan, &scanmeta, &results)
 		if err != nil {
-			log.Entry().WithError(err).Warnf("Failed to get SARIF SAST report")
-		}*/
+			log.Entry().WithError(err).Warnf("Failed to get SARIF IAC report")
+		}
 	}
 
 	err = c.GetHeaderReportJSON(&detailedResults)

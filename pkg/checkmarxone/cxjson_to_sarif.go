@@ -19,7 +19,7 @@ func ConvertCxSASTJSONToSarif(sys System, serverURL string, scanResults *[]ScanR
 	baseURL := serverURL + "/results/" + scan.ScanID + "/" + scan.ProjectID
 	projectBaseURL := serverURL + "/projects/" + scan.ProjectID + "/"
 
-	return convertCxJSONToSarif("sast", baseURL, projectBaseURL, scanResults, scan)
+	return convertCxJSONToSarif(sys, "sast", baseURL, projectBaseURL, scanResults, scan)
 }
 
 // ConvertCxSASTJSONToSarif is the entrypoint for the Parse function
@@ -27,10 +27,10 @@ func ConvertCxIACJSONToSarif(sys System, serverURL string, scanResults *[]ScanRe
 	baseURL := serverURL + "/results/" + scan.ScanID + "/" + scan.ProjectID
 	projectBaseURL := serverURL + "/projects/" + scan.ProjectID + "/"
 
-	return convertCxJSONToSarif("kics", baseURL, projectBaseURL, scanResults, scan)
+	return convertCxJSONToSarif(sys, "kics", baseURL, projectBaseURL, scanResults, scan)
 }
 
-func convertCxJSONToSarif(resultType, baseURL, projectBaseURL string, scanResults *[]ScanResult, scan *Scan) (format.SARIF, error) {
+func convertCxJSONToSarif(sys System, resultType, baseURL, projectBaseURL string, scanResults *[]ScanResult, scan *Scan) (format.SARIF, error) {
 	// Process sarif
 	start := time.Now()
 
@@ -57,6 +57,18 @@ func convertCxJSONToSarif(resultType, baseURL, projectBaseURL string, scanResult
 			continue
 		}
 
+		// Pending case 283343, the CweID for a KICS finding is not provided by the API.
+		// However, we need the IACFindingInfo struct data from another source, which also includes CWE
+		var iacFindingInfo *IACFindingInfo
+		if r.Type == "kics" {
+			findingInfo, err := sys.GetIACFindingInfo(r)
+			if err != nil {
+				log.Entry().Warningf("Error while retrieving IAC finding description for finding [%s] %s: %s", r.Data.QueryID, r.Data.QueryName, err)
+			} else {
+				iacFindingInfo = &findingInfo
+				r.VulnerabilityDetails.CweId = iacFindingInfo.Cwe
+			}
+		}
 		_, haskey := cweIdsForTaxonomies[r.VulnerabilityDetails.CweId]
 
 		if !haskey {
@@ -275,16 +287,24 @@ func convertCxJSONToSarif(resultType, baseURL, projectBaseURL string, scanResult
 		//handle the rules array
 		rule := *new(format.SarifRule)
 
-		rule.ID = fmt.Sprintf("checkmarxOne-%v/%d", r.Data.LanguageName, r.Data.QueryID)
+		rule.ID = queryID
 		words := strings.Split(r.Data.QueryName, "_")
 		for w := 0; w < len(words); w++ {
 			words[w] = piperutils.Title(strings.ToLower(words[w]))
 		}
 		rule.Name = strings.Join(words, "")
 
-		if r.Type == "sast" {
+		switch r.Type {
+		case "sast":
 			rule.HelpURI = fmt.Sprintf("%v/sast/description/%v/%v", baseURL, r.VulnerabilityDetails.CweId, r.Data.QueryID)
-		} else {
+		case "kics":
+			if iacFindingInfo == nil {
+				rule.HelpURI = "n/a"
+			} else {
+				rule.HelpURI = iacFindingInfo.URL
+			}
+
+		default:
 			rule.HelpURI = "n/a" // TODO: offsite links to kics docs eg https://docs.kics.io/2.1.20/queries/crossplane-queries/gcp/b4f65d13-a609-4dc1-af7c-63d2e08bffe9/
 		}
 		rule.Help = new(format.Help)
