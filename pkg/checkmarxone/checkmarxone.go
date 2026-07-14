@@ -1171,7 +1171,6 @@ func (sys *SystemInstance) GetIACFindingInfo(r ScanResult) (IACFindingInfo, erro
 			}
 			for id, info := range family {
 				sys.iacQueryCache[id] = info
-				fmt.Printf("Added query %s to cache: %+v\n", id, info)
 			}
 
 			if info, ok := sys.iacQueryCache[queryId]; ok {
