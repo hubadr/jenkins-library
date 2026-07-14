@@ -1706,6 +1706,9 @@ func (sys *SystemInstance) RequestNewReport(scanID, projectID, branch, reportTyp
 
 // Use the new V2 Report API to generate a PDF report
 func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string, engines []string) (string, error) {
+	if len(engines) == 0 {
+		return "", fmt.Errorf("no engines specified for report")
+	}
 	jsonData := map[string]interface{}{
 		"reportName": "improved-scan-report",
 		"entities": []map[string]interface{}{
@@ -1743,7 +1746,7 @@ func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string, engines
 	if err != nil {
 		return "", fmt.Errorf("Failed to trigger %+s report generation for scan %v: %w", engines, scanID, err)
 	} else {
-		sys.logger.Infof("Generating %+s report %v", engines, string(data))
+		sys.logger.Infof("Generating %s %s report %v", engines[0], reportType, string(data))
 	}
 
 	var reportResponse struct {

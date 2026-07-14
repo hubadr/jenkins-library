@@ -476,8 +476,6 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
 				c.config.Incremental = false
 			}
-		} else {
-			log.Entry().Infof("Project is already configured to use pipeline SAST preset %v", currentSASTPreset)
 		}
 
 		filterStr := currentSASTFilter
@@ -496,8 +494,6 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
 				c.config.Incremental = false
 			}
-		} else {
-			log.Entry().Infof("Project is already configured to use pipeline SAST file filter %v", filterStr)
 		}
 	}
 
@@ -517,8 +513,6 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 		} else if currentIACPreset != c.config.IacPreset {
 			log.Entry().Infof("Project configured IAC preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentIACPreset, c.config.IacPreset)
 			c.sys.SetProjectIACPreset(c.Project.ProjectID, c.config.IacPreset, true)
-		} else {
-			log.Entry().Infof("Project is already configured to use pipeline IAC preset %v", presetStr)
 		}
 
 		filterStr := currentIACFilter
@@ -531,13 +525,6 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 		} else if currentIACFilter != c.config.IacFilterPattern {
 			log.Entry().Infof("Project configured IAC file filter (%v) does not match pipeline yaml (%v) - updating project configuration.", currentIACFilter, c.config.IacFilterPattern)
 			c.sys.SetProjectIACFileFilter(c.Project.ProjectID, c.config.IacFilterPattern, true)
-
-			if c.config.Incremental {
-				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
-				c.config.Incremental = false
-			}
-		} else {
-			log.Entry().Infof("Project is already configured to use pipeline IAC file filter %v", filterStr)
 		}
 	}
 	return nil
