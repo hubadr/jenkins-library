@@ -236,6 +236,13 @@ func (sys *checkmarxOneSystemMock) GetIACPresetIDByName(_ string) (string, error
 	return "a-b-c-d", nil
 }
 
+func (sys *checkmarxOneSystemMock) GetIACFindingInfo(_ checkmarxOne.ScanResult) (checkmarxOne.IACFindingInfo, error) {
+	return checkmarxOne.IACFindingInfo{
+		Cwe: 0,
+		URL: "Test",
+	}, nil
+}
+
 func (sys *checkmarxOneSystemMock) GetGroupByID(groupID string) (checkmarxOne.Group, error) {
 	return checkmarxOne.Group{}, nil
 }

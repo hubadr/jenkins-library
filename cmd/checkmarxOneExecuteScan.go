@@ -480,25 +480,6 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 			log.Entry().Infof("Project is already configured to use pipeline SAST preset %v", currentSASTPreset)
 		}
 
-		if c.config.SastPreset == "" {
-			if currentSASTPreset == "" {
-				return fmt.Errorf("must specify the SAST preset in either the pipeline yaml or in the CheckmarxOne project configuration")
-			} else {
-				log.Entry().Infof("Pipeline yaml does not specify a SAST preset, will use project configuration (%v).", currentSASTPreset)
-			}
-			c.config.SastPreset = currentSASTPreset
-		} else if currentSASTPreset != c.config.SastPreset {
-			log.Entry().Infof("Project configured SAST preset (%v) does not match pipeline yaml (%v) - updating project configuration.", currentSASTPreset, c.config.SastPreset)
-			c.sys.SetProjectSASTPreset(c.Project.ProjectID, c.config.SastPreset, true)
-
-			if c.config.Incremental {
-				log.Entry().Warn("Changing project settings requires a full scan to take effect - switching from incremental to full")
-				c.config.Incremental = false
-			}
-		} else {
-			log.Entry().Infof("Project is already configured to use pipeline SAST preset %v", currentSASTPreset)
-		}
-
 		if c.config.SastFilterPattern == "" {
 			log.Entry().Infof("Pipeline yaml does not specify a SAST file filter, will use project configuration (%v).", currentSASTFilter)
 			c.config.SastFilterPattern = currentSASTFilter
@@ -518,7 +499,8 @@ func (c *checkmarxOneExecuteScanHelper) SetProjectPresetsAndFilters() error {
 	if c.ScanIAC {
 		if c.config.IacPreset == "" {
 			if currentIACPreset == "" {
-				return fmt.Errorf("must specify the IAC preset in either the pipeline yaml or in the CheckmarxOne project configuration")
+				//return fmt.Errorf("must specify the IAC preset in either the pipeline yaml or in the CheckmarxOne project configuration")
+				log.Entry().Infof("No IAC preset is set - using default (all checks)")
 			} else {
 				log.Entry().Infof("Pipeline yaml does not specify a IAC preset, will use project configuration (%v).", currentIACPreset)
 			}
@@ -681,7 +663,7 @@ func (c *checkmarxOneExecuteScanHelper) CreateScanRequest(incremental bool, uplo
 		}
 
 		if c.config.SastFilterPattern != "" {
-			sastConfigString += fmt.Sprintf(", file filter %s", c.config.SastFilterPattern)
+			sastConfigString += fmt.Sprintf(", file filter <%s>", c.config.SastFilterPattern)
 		} else {
 			sastConfigString += ", no files filtered"
 		}
@@ -706,7 +688,7 @@ func (c *checkmarxOneExecuteScanHelper) CreateScanRequest(incremental bool, uplo
 		iacConfigString += fmt.Sprintf("preset %s", c.config.IacPreset)
 
 		if c.config.IacFilterPattern != "" {
-			iacConfigString += fmt.Sprintf(", file filter %s", c.config.IacFilterPattern)
+			iacConfigString += fmt.Sprintf(", file filter <%s>", c.config.IacFilterPattern)
 		} else {
 			iacConfigString += ", no files filtered"
 		}
@@ -1015,15 +997,33 @@ func (c *checkmarxOneExecuteScanHelper) GetReportPDF(scan *checkmarxOne.Scan, en
 	return nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) GetReportSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
+func (c *checkmarxOneExecuteScanHelper) GetReportSASTSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
 	if c.config.ConvertToSarif {
 		if scanmeta.SAST != nil {
-			log.Entry().Info("Calling conversion to SARIF function.")
-			sarif, err := checkmarxOne.ConvertCxJSONToSarif(c.sys, c.config.ServerURL, results, scanmeta.SAST, scan)
+			log.Entry().Info("Calling SAST JSON conversion to SARIF function.")
+			sarif, err := checkmarxOne.ConvertCxSASTJSONToSarif(c.sys, c.config.ServerURL, results, scan)
 			if err != nil {
 				return fmt.Errorf("Failed to generate SARIF: %s", err)
 			}
-			paths, err := checkmarxOne.WriteSarif(sarif)
+			paths, err := checkmarxOne.WriteSASTSarif(sarif)
+			if err != nil {
+				return fmt.Errorf("Failed to write SARIF: %s", err)
+			}
+			c.reports = append(c.reports, paths...)
+		}
+	}
+	return nil
+}
+
+func (c *checkmarxOneExecuteScanHelper) GetReportIACSARIF(scan *checkmarxOne.Scan, scanmeta *checkmarxOne.ScanMetadata, results *[]checkmarxOne.ScanResult) error {
+	if c.config.ConvertToSarif {
+		if scanmeta.IAC != nil {
+			log.Entry().Info("Calling SAST JSON conversion to SARIF function.")
+			sarif, err := checkmarxOne.ConvertCxIACJSONToSarif(c.sys, c.config.ServerURL, results, scan)
+			if err != nil {
+				return fmt.Errorf("Failed to generate SARIF: %s", err)
+			}
+			paths, err := checkmarxOne.WriteIACSarif(sarif)
 			if err != nil {
 				return fmt.Errorf("Failed to write SARIF: %s", err)
 			}
@@ -1097,7 +1097,7 @@ func (c *checkmarxOneExecuteScanHelper) ParseResults(scan *checkmarxOne.Scan) (m
 		if err != nil {
 			log.Entry().WithError(err).Warnf("Failed to get PDF SAST report")
 		}
-		err = c.GetReportSARIF(scan, &scanmeta, &results)
+		err = c.GetReportSASTSARIF(scan, &scanmeta, &results)
 		if err != nil {
 			log.Entry().WithError(err).Warnf("Failed to get SARIF SAST report")
 		}
@@ -1112,10 +1112,10 @@ func (c *checkmarxOneExecuteScanHelper) ParseResults(scan *checkmarxOne.Scan) (m
 		if err != nil {
 			log.Entry().WithError(err).Warnf("Failed to get PDF IAC report")
 		}
-		/*err = c.GetReportSARIF(scan, scanmeta.SAST, &results)
+		err = c.GetReportIACSARIF(scan, &scanmeta, &results)
 		if err != nil {
-			log.Entry().WithError(err).Warnf("Failed to get SARIF SAST report")
-		}*/
+			log.Entry().WithError(err).Warnf("Failed to get SARIF IAC report")
+		}
 	}
 
 	err = c.GetHeaderReportJSON(&detailedResults)
