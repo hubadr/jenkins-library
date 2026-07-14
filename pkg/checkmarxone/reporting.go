@@ -245,7 +245,7 @@ func WriteSASTSarif(sarif format.SARIF) ([]piperutils.Path, error) {
 	utils := piperutils.Files{}
 	reportPaths := []piperutils.Path{}
 
-	sarifReportPath := filepath.Join(ReportsDirectory, "result.sarif")
+	sarifReportPath := filepath.Join(ReportsDirectory, "result-sast.sarif")
 	// Ensure reporting directory exists
 	if err := utils.MkdirAll(ReportsDirectory, 0777); err != nil {
 		return reportPaths, fmt.Errorf("failed to create report directory: %w", err)

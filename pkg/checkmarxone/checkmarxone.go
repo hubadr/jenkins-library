@@ -1330,6 +1330,14 @@ func (sys *SystemInstance) SetProjectIACFileFilter(projectID, filter string, all
 	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
 }
 
+func (sys *SystemInstance) SetProjectIACFileFilter(projectID, filter string, allowOverride bool) error {
+	var setting ProjectConfigurationSetting
+	setting.Key = ConfigurationKeys.IAC.FileFilter
+	setting.Value = filter
+	setting.AllowOverride = allowOverride
+	return sys.UpdateProjectConfiguration(projectID, []ProjectConfigurationSetting{setting})
+}
+
 // GetScans returns all scan status on the project addressed by projectID
 func (sys *SystemInstance) GetScan(scanID string) (Scan, error) {
 	var scan Scan
