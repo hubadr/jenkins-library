@@ -23,7 +23,7 @@ import (
 // ReportsDirectory defines the subfolder for the Checkmarx reports which are generated
 const ReportsDirectory = "checkmarxOne"
 const cxOrigin = ""
-const iacDefaultBlankPreset = "default all"
+const IACDefaultBlankPreset = "all checks"
 
 // AuthToken - Structure to store OAuth2 token
 // Updated for Cx1
@@ -1103,7 +1103,7 @@ func (sys *SystemInstance) GetPresets() ([]Preset, error) {
 */
 
 func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
-	if name == iacDefaultBlankPreset {
+	if name == IACDefaultBlankPreset {
 		return "", nil
 	}
 	type IACPreset struct {
@@ -1144,7 +1144,7 @@ func (sys *SystemInstance) GetIACPresetIDByName(name string) (string, error) {
 
 func (sys *SystemInstance) GetIACPresetNameByID(id string) (string, error) {
 	if id == "" {
-		return iacDefaultBlankPreset, nil
+		return IACDefaultBlankPreset, nil
 	}
 	var preset struct {
 		PresetID string `json:"id"`
@@ -1765,9 +1765,9 @@ func (sys *SystemInstance) RequestNewReportV2(scanID, reportType string, engines
 	header.Set("Content-Type", "application/json")
 	data, err := sendRequest(sys, http.MethodPost, "/reports/v2", bytes.NewBuffer(jsonValue), header, []int{})
 	if err != nil {
-		return "", fmt.Errorf("Failed to trigger report generation for scan %v: %w", scanID, err)
+		return "", fmt.Errorf("Failed to trigger %+s report generation for scan %v: %w", engines, scanID, err)
 	} else {
-		sys.logger.Infof("Generating report %v", string(data))
+		sys.logger.Infof("Generating %+s report %v", engines, string(data))
 	}
 
 	var reportResponse struct {
