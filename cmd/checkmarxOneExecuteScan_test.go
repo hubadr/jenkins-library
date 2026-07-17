@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -425,3 +428,44 @@ func TestUpdateProjectTags(t *testing.T) {
 		assert.Equal(t, project.Tags, oldTags) // project's tags must be merged
 	})
 }
+
+func TestCheckmarxOneZipFolder(t *testing.T) {
+	t.Parallel()
+
+	t.Run("output archive is not zipped into itself", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+
+		err := os.WriteFile(filepath.Join(dir, "abcd.go"), []byte("abcd.go"), 0o700)
+		assert.NoError(t, err)
+		err = os.Mkdir(filepath.Join(dir, "somepath"), 0o700)
+		assert.NoError(t, err)
+		err = os.WriteFile(filepath.Join(dir, "somepath", "abcd.txt"), []byte("somepath/abcd.txt"), 0o700)
+		assert.NoError(t, err)
+
+		// the output archive lives inside the folder being zipped, exactly like workspace.zip
+		zipFileName := filepath.Join(dir, "workspace.zip")
+		zipFile, err := os.Create(zipFileName)
+		assert.NoError(t, err)
+		defer zipFile.Close()
+
+		cx1sh := checkmarxOneExecuteScanHelper{}
+		utils := newcheckmarxOneExecuteScanUtilsBundle(dir, nil)
+
+		// no filter pattern - every file is a candidate, including the output archive itself
+		err = cx1sh.zipFolder(dir, zipFile, []string{}, zipFileName, utils)
+		assert.NoError(t, err)
+
+		zipInfo, err := zipFile.Stat()
+		assert.NoError(t, err)
+		reader, err := zip.NewReader(zipFile, zipInfo.Size())
+		assert.NoError(t, err)
+
+		for _, f := range reader.File {
+			assert.NotEqual(t, "workspace.zip", filepath.Base(f.Name), "the output archive must not be zipped into itself")
+		}
+		// only the two regular source files must be archived, never the output archive
+		assert.Len(t, reader.File, 2)
+	})
+}
+
