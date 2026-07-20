@@ -410,7 +410,7 @@ func addCheckmarxOneExecuteScanFlags(cmd *cobra.Command, stepConfig *checkmarxOn
 	cmd.Flags().StringSliceVar(&stepConfig.Assignees, "assignees", []string{``}, "Defines the assignees for the Github Issue created/updated with the results of the scan as a list of login names. [Not yet supported]")
 	cmd.Flags().BoolVar(&stepConfig.AvoidDuplicateProjectScans, "avoidDuplicateProjectScans", true, "Whether duplicate scans of the same project state shall be avoided or not  [Not yet supported]")
 	cmd.Flags().StringSliceVar(&stepConfig.Engines, "engines", []string{`sast`}, "The scan engines to trigger for this scan. Can be: sast, iac")
-	cmd.Flags().StringVar(&stepConfig.FilterPattern, "filterPattern", ``, "The filter pattern used to zip the files relevant for scanning, patterns can be negated by setting an exclamation mark in front i.e. `!test/*.js` would avoid adding any javascript files located in the test directory. For multiple-engine scans, this filter should include all files applicable to all engines - per-engine filters should be set separately through sastFileFilter and iacFileFilter.")
+	cmd.Flags().StringVar(&stepConfig.FilterPattern, "filterPattern", `!**/node_modules/**, !**/.xmake/**, !**/*_test.go, !**/vendor/**/*.go, **/*.html, **/*.xml, **/*.go, **/*.py, **/*.js, **/*.rb, **/*.scala, **/*.ts`, "The filter pattern used to zip the files relevant for scanning, patterns can be negated by setting an exclamation mark in front i.e. `!test/*.js` would avoid adding any javascript files located in the test directory. For multiple-engine scans, this filter should include all files applicable to all engines - per-engine filters should be set separately through sastFileFilter and iacFileFilter.")
 	cmd.Flags().StringVar(&stepConfig.FullScanCycle, "fullScanCycle", `5`, "Indicates how often a full scan should happen between the incremental scans when activated")
 	cmd.Flags().BoolVar(&stepConfig.FullScansScheduled, "fullScansScheduled", true, "Whether full scans are to be scheduled or not. Should be used in relation with `incremental` and `fullScanCycle`")
 	cmd.Flags().BoolVar(&stepConfig.GeneratePdfReport, "generatePdfReport", true, "Whether to generate a PDF report of the analysis results or not")
@@ -428,7 +428,7 @@ func addCheckmarxOneExecuteScanFlags(cmd *cobra.Command, stepConfig *checkmarxOn
 	cmd.Flags().StringVar(&stepConfig.ProjectCriticality, "projectCriticality", `3`, "The criticality of the checkmarxOne project, used during project creation")
 	cmd.Flags().StringVar(&stepConfig.ProjectName, "projectName", os.Getenv("PIPER_projectName"), "The name of the checkmarxOne project to scan into")
 	cmd.Flags().StringVar(&stepConfig.ProjectTags, "projectTags", os.Getenv("PIPER_projectTags"), "Used to tag a project with a JSON string, e.g., {\"key\":\"value\", \"keywithoutvalue\":\"\"}")
-	cmd.Flags().StringVar(&stepConfig.SastFilterPattern, "sastFilterPattern", `!**/node_modules/**, !**/.xmake/**, !**/*_test.go, !**/vendor/**/*.go, **/*.html, **/*.xml, **/*.go, **/*.py, **/*.js, **/*.rb, **/*.scala, **/*.ts`, "The pattern to filter the files relevant for scanning in SAST, patterns can be negated by setting an exclamation mark in front i.e. `!test/*.js` would avoid adding any javascript files located in the test directory")
+	cmd.Flags().StringVar(&stepConfig.SastFilterPattern, "sastFilterPattern", ``, "The pattern to filter the files relevant for scanning in SAST, patterns can be negated by setting an exclamation mark in front i.e. `!test/*.js` would avoid adding any javascript files located in the test directory")
 	cmd.Flags().StringVar(&stepConfig.SastPreset, "sastPreset", os.Getenv("PIPER_sastPreset"), "The preset to use for SAST scanning, if not set explicitly the step will attempt to look up the project's setting based on the availability of `checkmarxOneCredentialsId`")
 	cmd.Flags().StringVar(&stepConfig.ScanTags, "scanTags", os.Getenv("PIPER_scanTags"), "Used to tag a scan with a JSON string, e.g., {\"key\":\"value\", \"keywithoutvalue\":\"\"}")
 	cmd.Flags().StringVar(&stepConfig.Branch, "branch", os.Getenv("PIPER_branch"), "Used to supply the branch scanned in the repository, or a friendly-name set by the user")
@@ -533,7 +533,7 @@ func checkmarxOneExecuteScanMetadata() config.StepData {
 						Type:        "string",
 						Mandatory:   false,
 						Aliases:     []config.Alias{},
-						Default:     ``,
+						Default:     `!**/node_modules/**, !**/.xmake/**, !**/*_test.go, !**/vendor/**/*.go, **/*.html, **/*.xml, **/*.go, **/*.py, **/*.js, **/*.rb, **/*.scala, **/*.ts`,
 					},
 					{
 						Name:        "fullScanCycle",
@@ -740,7 +740,7 @@ func checkmarxOneExecuteScanMetadata() config.StepData {
 						Type:        "string",
 						Mandatory:   false,
 						Aliases:     []config.Alias{},
-						Default:     `!**/node_modules/**, !**/.xmake/**, !**/*_test.go, !**/vendor/**/*.go, **/*.html, **/*.xml, **/*.go, **/*.py, **/*.js, **/*.rb, **/*.scala, **/*.ts`,
+						Default:     ``,
 					},
 					{
 						Name:        "sastPreset",
