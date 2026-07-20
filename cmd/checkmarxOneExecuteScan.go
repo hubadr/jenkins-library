@@ -1373,14 +1373,14 @@ func (c *checkmarxOneExecuteScanHelper) zipWorkspaceFiles(filterPattern string, 
 	}
 	defer zipFile.Close()
 
-	err = c.zipFolder(utils.GetWorkspace(), zipFile, patterns, utils)
+	err = c.zipFolder(utils.GetWorkspace(), zipFile, patterns, zipFileName, utils)
 	if err != nil {
 		return nil, fmt.Errorf("failed to compact folder: %w", err)
 	}
 	return zipFile, nil
 }
 
-func (c *checkmarxOneExecuteScanHelper) zipFolder(source string, zipFile io.Writer, patterns []string, utils checkmarxOneExecuteScanUtils) error {
+func (c *checkmarxOneExecuteScanHelper) zipFolder(source string, zipFile io.Writer, patterns []string, zipFileName string, utils checkmarxOneExecuteScanUtils) error {
 	archive := zip.NewWriter(zipFile)
 	defer archive.Close()
 
@@ -1396,6 +1396,13 @@ func (c *checkmarxOneExecuteScanHelper) zipFolder(source string, zipFile io.Writ
 		baseDir = filepath.Base(source)
 	}
 
+	// resolve the output archive's absolute path so it can be skipped during the walk,
+	// otherwise the archive would recursively include itself and inflate indefinitely
+	absZipFileName, absZipErr := filepath.Abs(zipFileName)
+	if absZipErr != nil {
+		absZipFileName = filepath.Clean(zipFileName)
+	}
+
 	fileCount := 0
 	err = filepath.Walk(source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -1403,6 +1410,15 @@ func (c *checkmarxOneExecuteScanHelper) zipFolder(source string, zipFile io.Writ
 		}
 
 		if !info.Mode().IsRegular() || info.Size() == 0 {
+			return nil
+		}
+
+		// skip the output archive itself to avoid recursively zipping it into itself
+		absPath, absErr := filepath.Abs(path)
+		if absErr != nil {
+			absPath = filepath.Clean(path)
+		}
+		if absPath == absZipFileName {
 			return nil
 		}
 
