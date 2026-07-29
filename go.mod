@@ -303,3 +303,5 @@ require (
 	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
+
+replace github.com/SAP/jenkins-library => github.com/hubadr/jenkins-library v1.283.1-0.20260729123249-9519cc716cdf
