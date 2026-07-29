@@ -246,6 +246,10 @@ func (sys *checkmarxOneSystemMock) GetIACFindingInfo(_ checkmarxOne.ScanResult) 
 	}, nil
 }
 
+func (sys *checkmarxOneSystemMock) LoadIACHelpLinks(_ string) error {
+	return nil
+}
+
 func (sys *checkmarxOneSystemMock) GetGroupByID(groupID string) (checkmarxOne.Group, error) {
 	return checkmarxOne.Group{}, nil
 }
@@ -468,4 +472,3 @@ func TestCheckmarxOneZipFolder(t *testing.T) {
 		assert.Len(t, reader.File, 2)
 	})
 }
-

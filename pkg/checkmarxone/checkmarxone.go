@@ -406,6 +406,7 @@ type System interface {
 	GetIACPresetNameByID(presetID string) (string, error)
 	GetIACPresetIDByName(presetName string) (string, error)
 	GetIACFindingInfo(r ScanResult) (IACFindingInfo, error)
+	LoadIACHelpLinks(url string) error
 	GetProjectConfiguration(projectID string) ([]ProjectConfigurationSetting, error)
 	UpdateProjectConfiguration(projectID string, settings []ProjectConfigurationSetting) error
 
@@ -1165,23 +1166,36 @@ func (sys *SystemInstance) GetIACFindingInfo(r ScanResult) (IACFindingInfo, erro
 		if info, ok := sys.iacQueryCache[queryId]; ok {
 			return info, nil
 		} else {
-			family, err := sys.GetIACQueryFamily(strings.ToLower(r.Data.Platform))
-			if err != nil {
-				return IACFindingInfo{}, err
-			}
-			for id, info := range family {
-				sys.iacQueryCache[id] = info
-			}
-
-			if info, ok := sys.iacQueryCache[queryId]; ok {
-				return info, nil
-			} else {
-				return IACFindingInfo{}, fmt.Errorf("query with id %s not found", queryId)
-			}
+			return IACFindingInfo{}, fmt.Errorf("query with id %s not found", queryId)
 		}
 	} else {
 		return IACFindingInfo{}, fmt.Errorf("failed to get IAC query ID from: %+v", r.Data.QueryID)
 	}
+}
+
+func (sys *SystemInstance) LoadIACHelpLinks(path string) error {
+	var data []byte
+	var err error
+
+	if strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "http://") {
+		response, err := sys.client.SendRequest(http.MethodGet, path, nil, nil, nil)
+		if err != nil {
+			return fmt.Errorf("failed to load IAC help links from %s: %s", path, err)
+		}
+		if response != nil && response.Body != nil {
+			data, _ = io.ReadAll(response.Body)
+			response.Body.Close()
+		} else {
+			return fmt.Errorf("no content returned from %s", path)
+		}
+	} else {
+		data, err = os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+	}
+	err = json.Unmarshal(data, &sys.iacQueryCache)
+	return err
 }
 
 func (sys *SystemInstance) GetIACQueryFamily(family string) (map[string]IACFindingInfo, error) {

@@ -78,6 +78,17 @@ func checkmarxOneExecuteScan(config checkmarxOneExecuteScanOptions, _ *telemetry
 
 func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteScanInflux, cx1sh *checkmarxOneExecuteScanHelper) error {
 	err := error(nil)
+
+	// if this is an IaC scan, load the help links from json
+	if cx1sh.ScanIAC {
+		if config.IacHelpLinks == "" {
+			log.Entry().WithError(err).Fatalf("a path to the IAC help links json, see the checkmarxOneExecuteScan documentation")
+		}
+		if err = cx1sh.sys.LoadIACHelpLinks(config.IacHelpLinks); err != nil {
+			log.Entry().WithError(err).Fatalf("failed to load IAC help links from %s: %s", config.IacHelpLinks, err)
+		}
+	}
+
 	if len(cx1sh.config.ProjectID) == 0 {
 		cx1sh.Project, err = cx1sh.GetProjectByName()
 		if err != nil && err.Error() != "project not found" {
