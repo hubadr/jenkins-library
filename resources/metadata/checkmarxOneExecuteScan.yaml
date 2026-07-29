@@ -121,7 +121,15 @@ spec:
           - type: vaultSecret
             default: github
             name: githubVaultSecretName
-
+      - name: iacHelpLinks
+        type: string
+        description: A path to a json file (remote if http/https, local otherwise) containing a map of IAC_query_id:help_url
+        scope:
+          - PARAMETERS
+          - STAGES
+          - STEPS
+        default:
+          ""
       - name: iacFilterPattern
         type: string
         description: The pattern to filter the files relevant for scanning in IAC, patterns can be negated by setting an exclamation mark in front i.e. `!**/*.yaml` would avoid adding any yaml files located in the test directory

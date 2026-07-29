@@ -32,6 +32,7 @@ type checkmarxOneExecuteScanOptions struct {
 	GeneratePdfReport                    bool     `json:"generatePdfReport,omitempty"`
 	GithubAPIURL                         string   `json:"githubApiUrl,omitempty"`
 	GithubToken                          string   `json:"githubToken,omitempty"`
+	IacHelpLinks                         string   `json:"iacHelpLinks,omitempty"`
 	IacFilterPattern                     string   `json:"iacFilterPattern,omitempty"`
 	IacPreset                            string   `json:"iacPreset,omitempty"`
 	ScanSummaryInPullRequest             bool     `json:"scanSummaryInPullRequest,omitempty"`
@@ -416,6 +417,7 @@ func addCheckmarxOneExecuteScanFlags(cmd *cobra.Command, stepConfig *checkmarxOn
 	cmd.Flags().BoolVar(&stepConfig.GeneratePdfReport, "generatePdfReport", true, "Whether to generate a PDF report of the analysis results or not")
 	cmd.Flags().StringVar(&stepConfig.GithubAPIURL, "githubApiUrl", `https://api.github.com`, "Set the GitHub API URL.")
 	cmd.Flags().StringVar(&stepConfig.GithubToken, "githubToken", os.Getenv("PIPER_githubToken"), "GitHub personal access token as per https://help.github.com/en/github/authenticating-to-github/creating-a-personal-access-token-for-the-command-line")
+	cmd.Flags().StringVar(&stepConfig.IacHelpLinks, "iacHelpLinks", ``, "A path to a json file (remote if http/https, local otherwise) containing a map of IAC_query_id:help_url")
 	cmd.Flags().StringVar(&stepConfig.IacFilterPattern, "iacFilterPattern", ``, "The pattern to filter the files relevant for scanning in IAC, patterns can be negated by setting an exclamation mark in front i.e. `!**/*.yaml` would avoid adding any yaml files located in the test directory")
 	cmd.Flags().StringVar(&stepConfig.IacPreset, "iacPreset", os.Getenv("PIPER_iacPreset"), "The preset to use for IAC scanning, if not set explicitly the step will attempt to look up the project's setting based on the availability of `checkmarxOneCredentialsId`")
 	cmd.Flags().BoolVar(&stepConfig.ScanSummaryInPullRequest, "scanSummaryInPullRequest", true, "Whether the scan summary shall be added to the pull request as a comment or not. This is only applied if the step is executed in a pull request context. githubToken and githubApiUrl parameters must be set to allow the step to create the comment.")
@@ -590,6 +592,15 @@ func checkmarxOneExecuteScanMetadata() config.StepData {
 						Mandatory: false,
 						Aliases:   []config.Alias{{Name: "access_token"}},
 						Default:   os.Getenv("PIPER_githubToken"),
+					},
+					{
+						Name:        "iacHelpLinks",
+						ResourceRef: []config.ResourceReference{},
+						Scope:       []string{"PARAMETERS", "STAGES", "STEPS"},
+						Type:        "string",
+						Mandatory:   false,
+						Aliases:     []config.Alias{},
+						Default:     ``,
 					},
 					{
 						Name:        "iacFilterPattern",
