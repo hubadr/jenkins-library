@@ -1174,9 +1174,25 @@ func (sys *SystemInstance) GetIACFindingInfo(r ScanResult) (IACFindingInfo, erro
 }
 
 func (sys *SystemInstance) LoadIACHelpLinks(path string) error {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return err
+	var data []byte
+	var err error
+
+	if strings.HasPrefix(path, "https://") || strings.HasPrefix(path, "http://") {
+		response, err := sys.client.SendRequest(http.MethodGet, path, nil, nil, nil)
+		if err != nil {
+			return fmt.Errorf("failed to load IAC help links from %s: %s", path, err)
+		}
+		if response != nil && response.Body != nil {
+			data, _ = io.ReadAll(response.Body)
+			response.Body.Close()
+		} else {
+			return fmt.Errorf("no content returned from %s", path)
+		}
+	} else {
+		data, err = os.ReadFile(path)
+		if err != nil {
+			return err
+		}
 	}
 	err = json.Unmarshal(data, &sys.iacQueryCache)
 	return err
