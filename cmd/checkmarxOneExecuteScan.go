@@ -82,10 +82,11 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 	// if this is an IaC scan, load the help links from json
 	if cx1sh.ScanIAC {
 		if config.IacHelpLinks == "" {
-			log.Entry().WithError(err).Fatalf("a path to the IAC help links json, see the checkmarxOneExecuteScan documentation")
-		}
-		if err = cx1sh.sys.LoadIACHelpLinks(config.IacHelpLinks); err != nil {
-			log.Entry().WithError(err).Fatalf("failed to load IAC help links from %s: %s", config.IacHelpLinks, err)
+			log.Entry().WithError(err).Infof("No iacHelpLinks parameter provided - will use the backend API. Please consider providing this parameter to reduce server load.")
+		} else {
+			if err = cx1sh.sys.LoadIACHelpLinks(config.IacHelpLinks); err != nil {
+				log.Entry().WithError(err).Fatalf("failed to load IAC help links from %s: %s", config.IacHelpLinks, err)
+			}
 		}
 	}
 
