@@ -1166,19 +1166,7 @@ func (sys *SystemInstance) GetIACFindingInfo(r ScanResult) (IACFindingInfo, erro
 		if info, ok := sys.iacQueryCache[queryId]; ok {
 			return info, nil
 		} else {
-			family, err := sys.GetIACQueryFamily(strings.ToLower(r.Data.Platform))
-			if err != nil {
-				return IACFindingInfo{}, err
-			}
-			for id, info := range family {
-				sys.iacQueryCache[id] = info
-			}
-
-			if info, ok := sys.iacQueryCache[queryId]; ok {
-				return info, nil
-			} else {
-				return IACFindingInfo{}, fmt.Errorf("query with id %s not found", queryId)
-			}
+			return IACFindingInfo{}, fmt.Errorf("query with id %s not found", queryId)
 		}
 	} else {
 		return IACFindingInfo{}, fmt.Errorf("failed to get IAC query ID from: %+v", r.Data.QueryID)
