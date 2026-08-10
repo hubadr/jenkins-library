@@ -448,7 +448,7 @@ func addCheckmarxOneExecuteScanFlags(cmd *cobra.Command, stepConfig *checkmarxOn
 	cmd.Flags().StringVar(&stepConfig.ClientID, "clientId", os.Getenv("PIPER_clientId"), "The username to authenticate")
 	cmd.Flags().BoolVar(&stepConfig.VerifyOnly, "verifyOnly", false, "Whether the step shall only apply verification checks or whether it does a full scan and check cycle")
 	cmd.Flags().BoolVar(&stepConfig.VulnerabilityThresholdEnabled, "vulnerabilityThresholdEnabled", true, "Whether the thresholds are enabled or not. If enabled the build will be set to `vulnerabilityThresholdResult` in case a specific threshold value is exceeded")
-	cmd.Flags().BoolVar(&stepConfig.IacVulnerabilityThresholdEnabled, "iacVulnerabilityThresholdEnabled", true, "Whether the thresholds are enabled or not for IAC. If enabled the build will be set to `vulnerabilityThresholdResult` in case a specific threshold value is exceeded")
+	cmd.Flags().BoolVar(&stepConfig.IacVulnerabilityThresholdEnabled, "iacVulnerabilityThresholdEnabled", false, "Whether the thresholds are enabled or not for IAC. If enabled the build will be set to `vulnerabilityThresholdResult` in case a specific threshold value is exceeded")
 	cmd.Flags().IntVar(&stepConfig.VulnerabilityThresholdCritical, "vulnerabilityThresholdCritical", 100, "The specific threshold for Critical severity findings")
 	cmd.Flags().IntVar(&stepConfig.VulnerabilityThresholdHigh, "vulnerabilityThresholdHigh", 100, "The specific threshold for High severity findings")
 	cmd.Flags().IntVar(&stepConfig.VulnerabilityThresholdMedium, "vulnerabilityThresholdMedium", 100, "The specific threshold for Medium severity findings")
@@ -923,7 +923,7 @@ func checkmarxOneExecuteScanMetadata() config.StepData {
 						Type:        "bool",
 						Mandatory:   false,
 						Aliases:     []config.Alias{},
-						Default:     true,
+						Default:     false,
 					},
 					{
 						Name:        "vulnerabilityThresholdCritical",

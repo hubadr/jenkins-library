@@ -166,18 +166,7 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 
 	if config.VerifyOnly {
 		if len(scans) > 0 {
-			results, err := cx1sh.ParseResults(&scans[0]) // incl report-gen
-			if err != nil {
-				return fmt.Errorf("failed to get scan results: %s", err)
-			}
-
-			err = cx1sh.CheckCompliance(&scans[0], &results)
-			if err != nil {
-				log.SetErrorCategory(log.ErrorCompliance)
-				return fmt.Errorf("project %v not compliant: %s", cx1sh.Project.Name, err)
-			}
-
-			return nil
+			return cx1sh.CheckScanCompliance(&scans[0])
 		} else {
 			log.Entry().Warnf("Cannot load scans for project %v, verification only mode aborted", cx1sh.Project.Name)
 		}
@@ -246,14 +235,9 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 		return fmt.Errorf("failed while polling scan status: %s", err)
 	}
 
-	results, err := cx1sh.ParseResults(scan) // incl report-gen
+	err = cx1sh.CheckScanCompliance(scan)
 	if err != nil {
-		return fmt.Errorf("failed to get scan results: %s", err)
-	}
-	err = cx1sh.CheckCompliance(scan, &results)
-	if err != nil {
-		log.SetErrorCategory(log.ErrorCompliance)
-		return fmt.Errorf("project %v not compliant: %s", cx1sh.Project.Name, err)
+		return err
 	}
 	// TODO: upload logs to Splunk, influxDB?
 	return nil
@@ -934,13 +918,26 @@ Severity | Number of unaudited findings
 	return nil
 }
 
+func (c *checkmarxOneExecuteScanHelper) CheckScanCompliance(scan *checkmarxOne.Scan) error {
+	results, err := c.ParseResults(scan) // incl report-gen
+	if err != nil {
+		return fmt.Errorf("failed to get scan results: %s", err)
+	}
+	err = c.CheckCompliance(scan, &results)
+	if err != nil {
+		log.SetErrorCategory(log.ErrorCompliance)
+		return fmt.Errorf("project %v not compliant: %s", c.Project.Name, err)
+	}
+	return nil
+}
+
 func (c *checkmarxOneExecuteScanHelper) CheckCompliance(scan *checkmarxOne.Scan, detailedResults *map[string]interface{}) error {
 	links := []piperutils.Path{{Target: (*detailedResults)["DeepLink"].(string), Name: "Checkmarx One Web UI"}}
 	insecure := false
 	var insecureResults []string
 	var neutralResults []string
 
-	if c.config.VulnerabilityThresholdEnabled {
+	if c.config.VulnerabilityThresholdEnabled || c.config.IacVulnerabilityThresholdEnabled {
 		insecure, insecureResults, neutralResults = c.enforceThresholds(detailedResults)
 		scanReport := checkmarxOne.CreateCustomReport(detailedResults, insecureResults, neutralResults)
 
@@ -1099,6 +1096,18 @@ func (c *checkmarxOneExecuteScanHelper) ParseResults(scan *checkmarxOne.Scan) (m
 	detailedResults, err = c.getDetailedResults(scan, &scanmeta, &results)
 	if err != nil {
 		return detailedResults, fmt.Errorf("Unable to fetch detailed results for scan %v: %s", scan.ScanID, err)
+	}
+
+	data, err := json.MarshalIndent(detailedResults, "", "  ")
+	if err != nil {
+		panic("Broke: " + err.Error())
+	} else {
+		err = os.WriteFile("detailedresults.json", data, 0755)
+		if err != nil {
+			panic("Broke: " + err.Error())
+		} else {
+			log.Entry().Info("Wrote file")
+		}
 	}
 
 	if c.ScanSAST {
@@ -1282,6 +1291,12 @@ func (c *checkmarxOneExecuteScanHelper) getDetailedResults(scan *checkmarxOne.Sc
 	resultMap["Low"] = map[string]int{}
 	resultMap["Information"] = map[string]int{}
 
+	resultMap["IACCritical"] = map[string]int{}
+	resultMap["IACHigh"] = map[string]int{}
+	resultMap["IACMedium"] = map[string]int{}
+	resultMap["IACLow"] = map[string]int{}
+	resultMap["IACInformation"] = map[string]int{}
+
 	if len(*results) > 0 {
 		for _, result := range *results {
 			key := "Information"
@@ -1297,6 +1312,10 @@ func (c *checkmarxOneExecuteScanHelper) getDetailedResults(scan *checkmarxOne.Sc
 			case "INFORMATION":
 			default:
 				key = "Information"
+			}
+
+			if strings.EqualFold(result.Type, "kics") {
+				key = "IAC" + key
 			}
 
 			var submap map[string]int
@@ -1331,10 +1350,14 @@ func (c *checkmarxOneExecuteScanHelper) getDetailedResults(scan *checkmarxOne.Sc
 		}
 
 		// if the flag is switched on, build the list  of Low findings per query
+		// this only covers SAST findings
 		if c.config.VulnerabilityThresholdLowPerQuery {
 			var lowPerQuery = map[string]map[string]int{}
 
 			for _, result := range *results {
+				if !strings.EqualFold(result.Type, "sast") {
+					continue
+				}
 				if result.Severity != "LOW" {
 					continue
 				}
@@ -1369,6 +1392,47 @@ func (c *checkmarxOneExecuteScanHelper) getDetailedResults(scan *checkmarxOne.Sc
 			}
 
 			resultMap["LowPerQuery"] = lowPerQuery
+
+			lowPerQuery = map[string]map[string]int{}
+
+			for _, result := range *results {
+				if !strings.EqualFold(result.Type, "kics") {
+					continue
+				}
+				if result.Severity != "LOW" {
+					continue
+				}
+				key := result.Data.QueryName
+				var submap map[string]int
+				if lowPerQuery[key] == nil {
+					submap = map[string]int{}
+					lowPerQuery[key] = submap
+				} else {
+					submap = lowPerQuery[key]
+				}
+				submap["Issues"]++
+				auditState := "ToVerify"
+				switch result.State {
+				case "NOT_EXPLOITABLE":
+					auditState = "NotExploitable"
+				case "CONFIRMED":
+					auditState = "Confirmed"
+				case "URGENT", "URGENT ":
+					auditState = "Urgent"
+				case "PROPOSED_NOT_EXPLOITABLE":
+					auditState = "ProposedNotExploitable"
+				case "TO_VERIFY":
+				default:
+					auditState = "ToVerify"
+				}
+				submap[auditState]++
+
+				if auditState != "NotExploitable" {
+					submap["NotFalsePositive"]++
+				}
+			}
+
+			resultMap["IACLowPerQuery"] = lowPerQuery
 		}
 	}
 	return resultMap, nil
@@ -1562,6 +1626,34 @@ func (c *checkmarxOneExecuteScanHelper) enforceThresholds(results *map[string]in
 	neutralResults := []string{}
 	insecureResults := []string{}
 	insecure := false
+	if c.ScanSAST && c.config.VulnerabilityThresholdEnabled {
+		insecure, neutralResults, insecureResults = c.enforceThresholdsPerEngine("SAST", results)
+	}
+	if c.ScanIAC {
+		if c.config.VulnerabilityThresholdEnabled {
+			insecure2, neutralResults2, insecureResults2 := c.enforceThresholdsPerEngine("IAC", results)
+			if c.config.IacVulnerabilityThresholdEnabled {
+				insecure = insecure || insecure2
+				neutralResults = append(neutralResults, neutralResults2...)
+				insecureResults = append(insecureResults, insecureResults2...)
+			} else {
+				log.Entry().Infof("Skipping IAC threshold enforcement, IacVulnerabilityThresholdEnabled is set to false")
+			}
+		} else {
+			log.Entry().Warnf("IacVulnerabilityThresholdEnabled is set to true, but VulnerabilityThresholdEnabled is set to false. IAC threshold enforcement will be skipped.")
+		}
+	}
+	return insecure, neutralResults, insecureResults
+}
+
+func (c *checkmarxOneExecuteScanHelper) enforceThresholdsPerEngine(engine string, results *map[string]interface{}) (bool, []string, []string) {
+	pre := ""
+	if strings.EqualFold(engine, "iac") {
+		pre = "IAC"
+	}
+	neutralResults := []string{}
+	insecureResults := []string{}
+	insecure := false
 
 	cxCriticalThreshold := c.config.VulnerabilityThresholdCritical
 	cxHighThreshold := c.config.VulnerabilityThresholdHigh
@@ -1570,14 +1662,14 @@ func (c *checkmarxOneExecuteScanHelper) enforceThresholds(results *map[string]in
 	cxLowThresholdPerQuery := c.config.VulnerabilityThresholdLowPerQuery
 	cxLowThresholdPerQueryMax := c.config.VulnerabilityThresholdLowPerQueryMax
 	// findings are audited if they are in state Confirmed, Urgent or NotExploitable
-	criticalValue := (*results)["Critical"].(map[string]int)["ToVerify"] + (*results)["Critical"].(map[string]int)["ProposedNotExploitable"]
-	confirmedCriticalValue := (*results)["Critical"].(map[string]int)["Confirmed"] + (*results)["Critical"].(map[string]int)["Urgent"]
-	highValue := (*results)["High"].(map[string]int)["ToVerify"] + (*results)["High"].(map[string]int)["ProposedNotExploitable"]
-	confirmedHighValue := (*results)["High"].(map[string]int)["Confirmed"] + (*results)["High"].(map[string]int)["Urgent"]
-	mediumValue := (*results)["Medium"].(map[string]int)["ToVerify"] + (*results)["Medium"].(map[string]int)["ProposedNotExploitable"]
-	confirmedMediumValue := (*results)["Medium"].(map[string]int)["Confirmed"] + (*results)["Medium"].(map[string]int)["Urgent"]
-	lowValue := (*results)["Low"].(map[string]int)["ToVerify"] + (*results)["Low"].(map[string]int)["ProposedNotExploitable"]
-	confirmedLowValue := (*results)["Low"].(map[string]int)["Confirmed"] + (*results)["Low"].(map[string]int)["Urgent"]
+	criticalValue := (*results)[pre+"Critical"].(map[string]int)["ToVerify"] + (*results)[pre+"Critical"].(map[string]int)["ProposedNotExploitable"]
+	confirmedCriticalValue := (*results)[pre+"Critical"].(map[string]int)["Confirmed"] + (*results)[pre+"Critical"].(map[string]int)["Urgent"]
+	highValue := (*results)[pre+"High"].(map[string]int)["ToVerify"] + (*results)[pre+"High"].(map[string]int)["ProposedNotExploitable"]
+	confirmedHighValue := (*results)[pre+"High"].(map[string]int)["Confirmed"] + (*results)[pre+"High"].(map[string]int)["Urgent"]
+	mediumValue := (*results)[pre+"Medium"].(map[string]int)["ToVerify"] + (*results)[pre+"Medium"].(map[string]int)["ProposedNotExploitable"]
+	confirmedMediumValue := (*results)[pre+"Medium"].(map[string]int)["Confirmed"] + (*results)[pre+"Medium"].(map[string]int)["Urgent"]
+	lowValue := (*results)[pre+"Low"].(map[string]int)["ToVerify"] + (*results)[pre+"Low"].(map[string]int)["ProposedNotExploitable"]
+	confirmedLowValue := (*results)[pre+"Low"].(map[string]int)["Confirmed"] + (*results)[pre+"Low"].(map[string]int)["Urgent"]
 	var unit string
 	criticalViolation := ""
 	highViolation := ""
@@ -1585,26 +1677,26 @@ func (c *checkmarxOneExecuteScanHelper) enforceThresholds(results *map[string]in
 	lowViolation := ""
 	if c.config.VulnerabilityThresholdUnit == "percentage" {
 		unit = "%"
-		criticalAudited := (*results)["Critical"].(map[string]int)["NotExploitable"] + (*results)["Critical"].(map[string]int)["Confirmed"] + (*results)["Critical"].(map[string]int)["Urgent"]
-		criticalOverall := (*results)["Critical"].(map[string]int)["Issues"]
+		criticalAudited := (*results)[pre+"Critical"].(map[string]int)["NotExploitable"] + (*results)[pre+"Critical"].(map[string]int)["Confirmed"] + (*results)[pre+"Critical"].(map[string]int)["Urgent"]
+		criticalOverall := (*results)[pre+"Critical"].(map[string]int)["Issues"]
 		if criticalOverall == 0 {
 			criticalAudited = 1
 			criticalOverall = 1
 		}
-		highAudited := (*results)["High"].(map[string]int)["NotExploitable"] + (*results)["High"].(map[string]int)["Confirmed"] + (*results)["High"].(map[string]int)["Urgent"]
-		highOverall := (*results)["High"].(map[string]int)["Issues"]
+		highAudited := (*results)[pre+"High"].(map[string]int)["NotExploitable"] + (*results)[pre+"High"].(map[string]int)["Confirmed"] + (*results)[pre+"High"].(map[string]int)["Urgent"]
+		highOverall := (*results)[pre+"High"].(map[string]int)["Issues"]
 		if highOverall == 0 {
 			highAudited = 1
 			highOverall = 1
 		}
-		mediumAudited := (*results)["Medium"].(map[string]int)["NotExploitable"] + (*results)["Medium"].(map[string]int)["Confirmed"] + (*results)["Medium"].(map[string]int)["Urgent"]
-		mediumOverall := (*results)["Medium"].(map[string]int)["Issues"]
+		mediumAudited := (*results)[pre+"Medium"].(map[string]int)["NotExploitable"] + (*results)[pre+"Medium"].(map[string]int)["Confirmed"] + (*results)[pre+"Medium"].(map[string]int)["Urgent"]
+		mediumOverall := (*results)[pre+"Medium"].(map[string]int)["Issues"]
 		if mediumOverall == 0 {
 			mediumAudited = 1
 			mediumOverall = 1
 		}
-		lowAudited := (*results)["Low"].(map[string]int)["Confirmed"] + (*results)["Low"].(map[string]int)["NotExploitable"] + (*results)["Low"].(map[string]int)["Urgent"]
-		lowOverall := (*results)["Low"].(map[string]int)["Issues"]
+		lowAudited := (*results)[pre+"Low"].(map[string]int)["Confirmed"] + (*results)[pre+"Low"].(map[string]int)["NotExploitable"] + (*results)[pre+"Low"].(map[string]int)["Urgent"]
+		lowOverall := (*results)[pre+"Low"].(map[string]int)["Issues"]
 		if lowOverall == 0 {
 			lowAudited = 1
 			lowOverall = 1
@@ -1628,8 +1720,8 @@ func (c *checkmarxOneExecuteScanHelper) enforceThresholds(results *map[string]in
 		}
 		// if the flag is switched on, calculate the Low findings threshold per query
 		if cxLowThresholdPerQuery {
-			if (*results)["LowPerQuery"] != nil {
-				lowPerQueryMap := (*results)["LowPerQuery"].(map[string]map[string]int)
+			if (*results)[pre+"LowPerQuery"] != nil {
+				lowPerQueryMap := (*results)[pre+"LowPerQuery"].(map[string]map[string]int)
 
 				for lowQuery, resultsLowQuery := range lowPerQueryMap {
 					lowAuditedPerQuery := resultsLowQuery["Confirmed"] + resultsLowQuery["NotExploitable"] + resultsLowQuery["Urgent"]
@@ -1690,7 +1782,7 @@ func (c *checkmarxOneExecuteScanHelper) enforceThresholds(results *map[string]in
 	highText := fmt.Sprintf("High %v%v %v %v", highValue, unit, confirmedHighString, highViolation)
 	mediumText := fmt.Sprintf("Medium %v%v %v %v", mediumValue, unit, confirmedMediumString, mediumViolation)
 	lowText := fmt.Sprintf("Low %v%v %v %v", lowValue, unit, confirmedLowString, lowViolation)
-	log.Entry().Info("Result auditing status per severity:")
+	log.Entry().Info(engine + " Result auditing status per severity:")
 	if len(criticalViolation) > 0 {
 		insecureResults = append(insecureResults, criticalText)
 		log.Entry().Error(criticalText)

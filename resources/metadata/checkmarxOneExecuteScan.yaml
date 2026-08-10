@@ -407,7 +407,7 @@ spec:
           - PARAMETERS
           - STAGES
           - STEPS
-        default: true
+        default: false
       - name: vulnerabilityThresholdCritical
         type: int
         description: The specific threshold for Critical severity findings
