@@ -1098,18 +1098,6 @@ func (c *checkmarxOneExecuteScanHelper) ParseResults(scan *checkmarxOne.Scan) (m
 		return detailedResults, fmt.Errorf("Unable to fetch detailed results for scan %v: %s", scan.ScanID, err)
 	}
 
-	data, err := json.MarshalIndent(detailedResults, "", "  ")
-	if err != nil {
-		panic("Broke: " + err.Error())
-	} else {
-		err = os.WriteFile("detailedresults.json", data, 0755)
-		if err != nil {
-			panic("Broke: " + err.Error())
-		} else {
-			log.Entry().Info("Wrote file")
-		}
-	}
-
 	if c.ScanSAST {
 		err = c.GetReportJSON(scan, []string{"sast"})
 		if err != nil {
