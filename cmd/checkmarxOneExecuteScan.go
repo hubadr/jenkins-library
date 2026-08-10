@@ -140,19 +140,6 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 		}
 	}
 
-	err = cx1sh.SetProjectPresetsAndFilters()
-	if err != nil {
-		return fmt.Errorf("failed to set configuration: %s", err)
-	}
-
-	// update project's tags
-	if (len(config.ProjectTags)) > 0 {
-		err = cx1sh.UpdateProjectTags()
-		if err != nil {
-			log.Entry().WithError(err).Warnf("failed to tags the project: %s", err)
-		}
-	}
-
 	fullScanCycle, err := strconv.Atoi(cx1sh.config.FullScanCycle)
 	if err != nil {
 		log.SetErrorCategory(log.ErrorConfiguration)
@@ -168,7 +155,20 @@ func runStep(config checkmarxOneExecuteScanOptions, influx *checkmarxOneExecuteS
 		if len(scans) > 0 {
 			return cx1sh.CheckScanCompliance(&scans[0])
 		} else {
-			log.Entry().Warnf("Cannot load scans for project %v, verification only mode aborted", cx1sh.Project.Name)
+			return fmt.Errorf("Cannot load scans for project %v, verification only mode aborted", cx1sh.Project.Name)
+		}
+	}
+
+	err = cx1sh.SetProjectPresetsAndFilters()
+	if err != nil {
+		return fmt.Errorf("failed to set configuration: %s", err)
+	}
+
+	// update project's tags
+	if (len(config.ProjectTags)) > 0 {
+		err = cx1sh.UpdateProjectTags()
+		if err != nil {
+			log.Entry().WithError(err).Warnf("failed to tags the project: %s", err)
 		}
 	}
 
