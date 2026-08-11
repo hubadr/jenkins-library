@@ -69,7 +69,7 @@ func TestCreateJSONReport(t *testing.T) {
 
 	resultMap["LowPerQuery"] = lowPerQuery
 
-	reportingData := CreateJSONHeaderReport(&resultMap)
+	reportingData := CreateJSONHeaderReport(&resultMap, "sast")
 	assert.Equal(t, "21e40b36-0dd7-48e5-9768-da1a8f36c907", reportingData.ScanID)
 	assert.Equal(t, "ssba", reportingData.ProjectName)
 	assert.Equal(t, "f5702f86-b396-417f-82e2-4949a55d5382", reportingData.ProjectID)

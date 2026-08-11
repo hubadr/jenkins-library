@@ -27,7 +27,6 @@ type CheckmarxOneReportData struct {
 	GroupID         string     `json:"groupID"`
 	DeepLink        string     `json:"deepLink"`
 	Preset          string     `json:"preset"`
-	IACPreset       string     `json:"iacPreset"`
 	ScanType        string     `json:"scanType"`
 	Findings        *[]Finding `json:"findings"`
 }
@@ -69,7 +68,7 @@ func CreateCustomReport(data *map[string]interface{}, insecure, neutral []string
 			{Description: "Files scanned", Details: fmt.Sprint((*data)["FilesScanned"])},
 			{Description: "IAC Lines of code scanned", Details: fmt.Sprint((*data)["IacLinesOfCodeScanned"])},
 			{Description: "IAC Files scanned", Details: fmt.Sprint((*data)["IacFilesScanned"])},
-			{Description: "Tool version", Details: fmt.Sprint((*data)["ToolVersion"])},
+			{Description: "Tool version", Details: fmt.Sprintf("%s, %s, %s", (*data)["ToolVersion"], (*data)["SASTVersion"], (*data)["IACVersion"])},
 			{Description: "Deep link", Details: deepLink},
 		},
 		Overview:   []reporting.OverviewRow{},
@@ -163,7 +162,7 @@ func CreateCustomReport(data *map[string]interface{}, insecure, neutral []string
 	return scanReport
 }
 
-func CreateJSONHeaderReport(data *map[string]interface{}) CheckmarxOneReportData {
+func CreateJSONHeaderReport(data *map[string]interface{}, engine string) CheckmarxOneReportData {
 	checkmarxReportData := CheckmarxOneReportData{
 		ToolName:        `CheckmarxOne`,
 		ProjectName:     fmt.Sprint((*data)["ProjectName"]),
@@ -180,15 +179,19 @@ func CreateJSONHeaderReport(data *map[string]interface{}) CheckmarxOneReportData
 	}
 
 	findings := []Finding{}
+	pre := ""
+	if strings.EqualFold(engine, "iac") {
+		pre = "IAC"
+		checkmarxReportData.Preset = fmt.Sprint((*data)["IacPreset"])
+		checkmarxReportData.ScanType = "Full"
+		checkmarxReportData.ToolVersion += ", " + fmt.Sprint((*data)["IACVersion"])
+	} else {
+		checkmarxReportData.ToolVersion += ", " + fmt.Sprint((*data)["SASTVersion"])
+	}
 	getCount := func(severity, key string) int {
 		count := 0
 
-		if m, ok := (*data)[severity]; ok {
-			if m, ok := m.(map[string]int); ok {
-				count += m[key]
-			}
-		}
-		if m, ok := (*data)["IAC"+severity]; ok {
+		if m, ok := (*data)[pre+severity]; ok {
 			if m, ok := m.(map[string]int); ok {
 				count += m[key]
 			}
@@ -224,35 +227,18 @@ func CreateJSONHeaderReport(data *map[string]interface{}) CheckmarxOneReportData
 	lowFindings := Finding{}
 	lowFindings.ClassificationName = "Low"
 
-	_, sast_ok := (*data)["LowPerQuery"]
-	_, iac_ok := (*data)["IACLowPerQuery"]
-	if sast_ok || iac_ok {
+	if _, ok := (*data)[pre+"LowPerQuery"]; ok {
 		lowPerQueryList := []LowPerQuery{}
-		if sast_ok {
-			lowPerQueryMap := (*data)["LowPerQuery"].(map[string]map[string]int)
-			for queryName, resultsLowQuery := range lowPerQueryMap {
-				audited := resultsLowQuery["Confirmed"] + resultsLowQuery["NotExploitable"] + resultsLowQuery["Urgent"]
-				total := resultsLowQuery["Issues"]
-				lowPerQuery := LowPerQuery{}
-				lowPerQuery.QueryName = queryName
-				lowPerQuery.Audited = audited
-				lowPerQuery.Confirmed = resultsLowQuery["Confirmed"] + resultsLowQuery["Urgent"]
-				lowPerQuery.Total = total
-				lowPerQueryList = append(lowPerQueryList, lowPerQuery)
-			}
-		}
-		if iac_ok {
-			lowPerQueryMap := (*data)["IACLowPerQuery"].(map[string]map[string]int)
-			for queryName, resultsLowQuery := range lowPerQueryMap {
-				audited := resultsLowQuery["Confirmed"] + resultsLowQuery["NotExploitable"] + resultsLowQuery["Urgent"]
-				total := resultsLowQuery["Issues"]
-				lowPerQuery := LowPerQuery{}
-				lowPerQuery.QueryName = queryName
-				lowPerQuery.Audited = audited
-				lowPerQuery.Confirmed = resultsLowQuery["Confirmed"] + resultsLowQuery["Urgent"]
-				lowPerQuery.Total = total
-				lowPerQueryList = append(lowPerQueryList, lowPerQuery)
-			}
+		lowPerQueryMap := (*data)[pre+"LowPerQuery"].(map[string]map[string]int)
+		for queryName, resultsLowQuery := range lowPerQueryMap {
+			audited := resultsLowQuery["Confirmed"] + resultsLowQuery["NotExploitable"] + resultsLowQuery["Urgent"]
+			total := resultsLowQuery["Issues"]
+			lowPerQuery := LowPerQuery{}
+			lowPerQuery.QueryName = queryName
+			lowPerQuery.Audited = audited
+			lowPerQuery.Confirmed = resultsLowQuery["Confirmed"] + resultsLowQuery["Urgent"]
+			lowPerQuery.Total = total
+			lowPerQueryList = append(lowPerQueryList, lowPerQuery)
 		}
 		lowFindings.LowPerQuery = &lowPerQueryList
 		findings = append(findings, lowFindings)
@@ -269,12 +255,18 @@ func CreateJSONHeaderReport(data *map[string]interface{}) CheckmarxOneReportData
 	return checkmarxReportData
 }
 
-func WriteJSONHeaderReport(jsonReport CheckmarxOneReportData) ([]piperutils.Path, error) {
+func WriteJSONHeaderReport(jsonReport CheckmarxOneReportData, engine string) ([]piperutils.Path, error) {
 	utils := piperutils.Files{}
 	reportPaths := []piperutils.Path{}
 
+	filename := "piper_checkmarxone_report.json"
+	reportName := "CheckmarxOne JSON compliance report"
+	if strings.EqualFold(engine, "iac") {
+		filename = "piper_checkmarxone_iac_report.json"
+		reportName = "CheckmarxOne IAC JSON compliance report"
+	}
 	// Standard JSON Report
-	jsonComplianceReportPath := filepath.Join(ReportsDirectory, "piper_checkmarxone_report.json")
+	jsonComplianceReportPath := filepath.Join(ReportsDirectory, filename)
 	// Ensure reporting directory exists
 	if err := utils.MkdirAll(ReportsDirectory, 0777); err != nil {
 		return reportPaths, fmt.Errorf("failed to create report directory: %w", err)
@@ -283,9 +275,9 @@ func WriteJSONHeaderReport(jsonReport CheckmarxOneReportData) ([]piperutils.Path
 	file, _ := json.Marshal(jsonReport)
 	if err := utils.FileWrite(jsonComplianceReportPath, file, 0666); err != nil {
 		log.SetErrorCategory(log.ErrorConfiguration)
-		return reportPaths, fmt.Errorf("failed to write CheckmarxOne JSON compliance report: %w", err)
+		return reportPaths, fmt.Errorf("failed to write %s: %w", reportName, err)
 	}
-	reportPaths = append(reportPaths, piperutils.Path{Name: "CheckmarxOne JSON Compliance Report", Target: jsonComplianceReportPath})
+	reportPaths = append(reportPaths, piperutils.Path{Name: reportName, Target: jsonComplianceReportPath})
 
 	return reportPaths, nil
 }
