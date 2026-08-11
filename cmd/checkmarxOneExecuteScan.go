@@ -1858,42 +1858,59 @@ func (c *checkmarxOneExecuteScanHelper) enforceThresholdsPerEngine(engine string
 }
 
 func (c *checkmarxOneExecuteScanHelper) reportToInflux(results *map[string]interface{}) {
-	c.influx.checkmarxOne_data.fields.critical_issues = (*results)["Critical"].(map[string]int)["Issues"]
-	c.influx.checkmarxOne_data.fields.critical_not_false_postive = (*results)["Critical"].(map[string]int)["NotFalsePositive"]
-	c.influx.checkmarxOne_data.fields.critical_not_exploitable = (*results)["Critical"].(map[string]int)["NotExploitable"]
-	c.influx.checkmarxOne_data.fields.critical_confirmed = (*results)["Critical"].(map[string]int)["Confirmed"]
-	c.influx.checkmarxOne_data.fields.critical_urgent = (*results)["Critical"].(map[string]int)["Urgent"]
-	c.influx.checkmarxOne_data.fields.critical_proposed_not_exploitable = (*results)["Critical"].(map[string]int)["ProposedNotExploitable"]
-	c.influx.checkmarxOne_data.fields.critical_to_verify = (*results)["Critical"].(map[string]int)["ToVerify"]
+	getCount := func(severity, key string) int {
+		count := 0
 
-	c.influx.checkmarxOne_data.fields.high_issues = (*results)["High"].(map[string]int)["Issues"]
-	c.influx.checkmarxOne_data.fields.high_not_false_postive = (*results)["High"].(map[string]int)["NotFalsePositive"]
-	c.influx.checkmarxOne_data.fields.high_not_exploitable = (*results)["High"].(map[string]int)["NotExploitable"]
-	c.influx.checkmarxOne_data.fields.high_confirmed = (*results)["High"].(map[string]int)["Confirmed"]
-	c.influx.checkmarxOne_data.fields.high_urgent = (*results)["High"].(map[string]int)["Urgent"]
-	c.influx.checkmarxOne_data.fields.high_proposed_not_exploitable = (*results)["High"].(map[string]int)["ProposedNotExploitable"]
-	c.influx.checkmarxOne_data.fields.high_to_verify = (*results)["High"].(map[string]int)["ToVerify"]
-	c.influx.checkmarxOne_data.fields.medium_issues = (*results)["Medium"].(map[string]int)["Issues"]
-	c.influx.checkmarxOne_data.fields.medium_not_false_postive = (*results)["Medium"].(map[string]int)["NotFalsePositive"]
-	c.influx.checkmarxOne_data.fields.medium_not_exploitable = (*results)["Medium"].(map[string]int)["NotExploitable"]
-	c.influx.checkmarxOne_data.fields.medium_confirmed = (*results)["Medium"].(map[string]int)["Confirmed"]
-	c.influx.checkmarxOne_data.fields.medium_urgent = (*results)["Medium"].(map[string]int)["Urgent"]
-	c.influx.checkmarxOne_data.fields.medium_proposed_not_exploitable = (*results)["Medium"].(map[string]int)["ProposedNotExploitable"]
-	c.influx.checkmarxOne_data.fields.medium_to_verify = (*results)["Medium"].(map[string]int)["ToVerify"]
-	c.influx.checkmarxOne_data.fields.low_issues = (*results)["Low"].(map[string]int)["Issues"]
-	c.influx.checkmarxOne_data.fields.low_not_false_postive = (*results)["Low"].(map[string]int)["NotFalsePositive"]
-	c.influx.checkmarxOne_data.fields.low_not_exploitable = (*results)["Low"].(map[string]int)["NotExploitable"]
-	c.influx.checkmarxOne_data.fields.low_confirmed = (*results)["Low"].(map[string]int)["Confirmed"]
-	c.influx.checkmarxOne_data.fields.low_urgent = (*results)["Low"].(map[string]int)["Urgent"]
-	c.influx.checkmarxOne_data.fields.low_proposed_not_exploitable = (*results)["Low"].(map[string]int)["ProposedNotExploitable"]
-	c.influx.checkmarxOne_data.fields.low_to_verify = (*results)["Low"].(map[string]int)["ToVerify"]
-	c.influx.checkmarxOne_data.fields.information_issues = (*results)["Information"].(map[string]int)["Issues"]
-	c.influx.checkmarxOne_data.fields.information_not_false_postive = (*results)["Information"].(map[string]int)["NotFalsePositive"]
-	c.influx.checkmarxOne_data.fields.information_not_exploitable = (*results)["Information"].(map[string]int)["NotExploitable"]
-	c.influx.checkmarxOne_data.fields.information_confirmed = (*results)["Information"].(map[string]int)["Confirmed"]
-	c.influx.checkmarxOne_data.fields.information_urgent = (*results)["Information"].(map[string]int)["Urgent"]
-	c.influx.checkmarxOne_data.fields.information_proposed_not_exploitable = (*results)["Information"].(map[string]int)["ProposedNotExploitable"]
-	c.influx.checkmarxOne_data.fields.information_to_verify = (*results)["Information"].(map[string]int)["ToVerify"]
+		if m, ok := (*results)[severity]; ok {
+			if m, ok := m.(map[string]int); ok {
+				count += m[key]
+			}
+		}
+		if m, ok := (*results)["IAC"+severity]; ok {
+			if m, ok := m.(map[string]int); ok {
+				count += m[key]
+			}
+		}
+		return count
+	}
+
+	c.influx.checkmarxOne_data.fields.critical_issues = getCount("Critical", "Issues")
+	c.influx.checkmarxOne_data.fields.critical_not_false_postive = getCount("Critical", "NotFalsePositive")
+	c.influx.checkmarxOne_data.fields.critical_not_exploitable = getCount("Critical", "NotExploitable")
+	c.influx.checkmarxOne_data.fields.critical_confirmed = getCount("Critical", "Confirmed")
+	c.influx.checkmarxOne_data.fields.critical_urgent = getCount("Critical", "Urgent")
+	c.influx.checkmarxOne_data.fields.critical_proposed_not_exploitable = getCount("Critical", "ProposedNotExploitable")
+	c.influx.checkmarxOne_data.fields.critical_to_verify = getCount("Critical", "ToVerify")
+
+	c.influx.checkmarxOne_data.fields.high_issues = getCount("High", "Issues")
+	c.influx.checkmarxOne_data.fields.high_not_false_postive = getCount("High", "NotFalsePositive")
+	c.influx.checkmarxOne_data.fields.high_not_exploitable = getCount("High", "NotExploitable")
+	c.influx.checkmarxOne_data.fields.high_confirmed = getCount("High", "Confirmed")
+	c.influx.checkmarxOne_data.fields.high_urgent = getCount("High", "Urgent")
+	c.influx.checkmarxOne_data.fields.high_proposed_not_exploitable = getCount("High", "ProposedNotExploitable")
+	c.influx.checkmarxOne_data.fields.high_to_verify = getCount("High", "ToVerify")
+	c.influx.checkmarxOne_data.fields.medium_issues = getCount("Medium", "Issues")
+	c.influx.checkmarxOne_data.fields.medium_not_false_postive = getCount("Medium", "NotFalsePositive")
+	c.influx.checkmarxOne_data.fields.medium_not_exploitable = getCount("Medium", "NotExploitable")
+	c.influx.checkmarxOne_data.fields.medium_confirmed = getCount("Medium", "Confirmed")
+	c.influx.checkmarxOne_data.fields.medium_urgent = getCount("Medium", "Urgent")
+	c.influx.checkmarxOne_data.fields.medium_proposed_not_exploitable = getCount("Medium", "ProposedNotExploitable")
+	c.influx.checkmarxOne_data.fields.medium_to_verify = getCount("Medium", "ToVerify")
+	c.influx.checkmarxOne_data.fields.low_issues = getCount("Low", "Issues")
+	c.influx.checkmarxOne_data.fields.low_not_false_postive = getCount("Low", "NotFalsePositive")
+	c.influx.checkmarxOne_data.fields.low_not_exploitable = getCount("Low", "NotExploitable")
+	c.influx.checkmarxOne_data.fields.low_confirmed = getCount("Low", "Confirmed")
+	c.influx.checkmarxOne_data.fields.low_urgent = getCount("Low", "Urgent")
+	c.influx.checkmarxOne_data.fields.low_proposed_not_exploitable = getCount("Low", "ProposedNotExploitable")
+	c.influx.checkmarxOne_data.fields.low_to_verify = getCount("Low", "ToVerify")
+	c.influx.checkmarxOne_data.fields.information_issues = getCount("Information", "Issues")
+	c.influx.checkmarxOne_data.fields.information_not_false_postive = getCount("Information", "NotFalsePositive")
+	c.influx.checkmarxOne_data.fields.information_not_exploitable = getCount("Information", "NotExploitable")
+	c.influx.checkmarxOne_data.fields.information_confirmed = getCount("Information", "Confirmed")
+	c.influx.checkmarxOne_data.fields.information_urgent = getCount("Information", "Urgent")
+	c.influx.checkmarxOne_data.fields.information_proposed_not_exploitable = getCount("Information", "ProposedNotExploitable")
+	c.influx.checkmarxOne_data.fields.information_to_verify = getCount("Information", "ToVerify")
+
 	c.influx.checkmarxOne_data.fields.initiator_name = (*results)["InitiatorName"].(string)
 	c.influx.checkmarxOne_data.fields.owner = (*results)["Owner"].(string)
 	c.influx.checkmarxOne_data.fields.scan_id = (*results)["ScanId"].(string)
