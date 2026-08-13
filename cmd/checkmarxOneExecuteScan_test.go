@@ -8,6 +8,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -470,5 +471,210 @@ func TestCheckmarxOneZipFolder(t *testing.T) {
 		}
 		// only the two regular source files must be archived, never the output archive
 		assert.Len(t, reader.File, 2)
+	})
+}
+
+func TestCheckmarxOneGitComment(t *testing.T) {
+	detailedResults := map[string]interface{}{
+		"Application":                     "80fdd5b7-9269-423e-a483-878ecb3c7ae8",
+		"ApplicationFullPathOnReportDate": "SSBA",
+		"Critical":                        map[string]int{"Issues": 2, "NotExploitable": 2},
+		"DeepLink":                        "test/projects/ca6bbcca-c75a-4a07-8298-552ec400732a/overview?branch=new-branch2",
+		"FilesScanned":                    10,
+		"Group":                           "",
+		"GroupFullPathOnReportDate":       "",
+		"High":                            map[string]int{"Issues": 1, "NotExploitable": 1},
+		"IACCritical":                     map[string]int{},
+		"IACHigh":                         map[string]int{"Issues": 1, "NotFalsePositive": 1, "ToVerify": 1},
+		"IACInformation":                  map[string]int{},
+		"IACLow":                          map[string]int{"Issues": 1, "NotFalsePositive": 1, "ToVerify": 1},
+		"IACLowPerQuery": map[string]map[string]int{
+			"Healthcheck Instruction Missing": map[string]int{"Issues": 1, "NotFalsePositive": 1, "ToVerify": 1},
+		},
+		"IACMedium":             map[string]int{},
+		"IACVersion":            "IAC: 2.1.20",
+		"IacFilesScanned":       1,
+		"IacLinesOfCodeScanned": 11,
+		"IacPreset":             "all checks",
+		"Information":           map[string]int{"Issues": 13, "NotExploitable": 1, "NotFalsePositive": 12, "ToVerify": 12},
+		"InitiatorName":         "michael.kubiaczyk@checkmarx.com",
+		"LinesOfCodeScanned":    158,
+		"Low":                   map[string]int{"Issues": 2, "NotExploitable": 1, "NotFalsePositive": 1, "ToVerify": 1},
+		"LowPerQuery": map[string]map[string]int{
+			"Reflected_XSS":                          map[string]int{"Issues": 1, "NotFalsePositive": 1, "ToVerify": 1},
+			"Spring_Missing_Content_Security_Policy": map[string]int{"Issues": 1, "NotExploitable": 1},
+		},
+		"Medium":             map[string]int{"Issues": 4, "NotExploitable": 1, "NotFalsePositive": 3, "ToVerify": 3},
+		"Owner":              "Cx1 Gap: no project owner",
+		"ProjectId":          "ca6bbcca-c75a-4a07-8298-552ec400732a",
+		"ProjectName":        "piper-iac-sast-test1",
+		"ReportCreationTime": "2026-08-11 13:38:56.647088 +0200 CEST m=+1.527286701",
+		"SASTVersion":        "SAST: 9.7.6",
+		"SastPreset":         "All",
+		"ScanId":             "bdff84f5-f226-4591-86e0-f43511474f35",
+		"ScanStart":          "2026-08-05T14:40:31.707039Z",
+		"ScanTime":           "9.299223s",
+		"ScanType":           "Incremental",
+		"ToolVersion":        "CxOne: 3.64.0",
+	}
+
+	mainconfig := checkmarxOneExecuteScanOptions{
+		VulnerabilityThresholdEnabled:        true,
+		VulnerabilityThresholdCritical:       100,
+		VulnerabilityThresholdHigh:           100,
+		VulnerabilityThresholdMedium:         100,
+		VulnerabilityThresholdLow:            10,
+		VulnerabilityThresholdLowPerQuery:    true,
+		VulnerabilityThresholdLowPerQueryMax: 10,
+		VulnerabilityThresholdResult:         "FAILURE",
+		VulnerabilityThresholdUnit:           "percentage",
+		IacVulnerabilityThresholdEnabled:     false,
+	}
+
+	t.Run("sast report with LowPerQuery enabled", func(t *testing.T) {
+		var sast_status gitComment
+		sastScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "sast")
+		sast_status.Parse(sastScanReportOverview.Findings, &mainconfig)
+		sastTable := sast_status.String()
+
+		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
+		**SAST Scan Preset**: %s
+		**SAST Results**
+		%s
+
+		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+
+		fmt.Println(sastScan)
+	})
+
+	t.Run("iac report with LowPerQuery enabled", func(t *testing.T) {
+		var iac_status gitComment
+		iacScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "iac")
+		iac_status.Parse(iacScanReportOverview.Findings, &mainconfig)
+		iacTable := iac_status.String()
+
+		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
+		**IAC Results**
+		%s
+
+		`, iacScanReportOverview.Preset, iacTable)
+
+		fmt.Println(iacScan)
+	})
+
+	// remove lowPerQuery from config
+	mainconfig.VulnerabilityThresholdLowPerQuery = false
+	// remove lowPerQuery data from detailedResults
+	delete(detailedResults, "LowPerQuery")
+	delete(detailedResults, "IACLowPerQuery")
+
+	t.Run("sast report with LowPerQuery disabled", func(t *testing.T) {
+		var sast_status gitComment
+		sastScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "sast")
+		sast_status.Parse(sastScanReportOverview.Findings, &mainconfig)
+		sastTable := sast_status.String()
+
+		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
+		**SAST Scan Preset**: %s
+		**SAST Results**
+		%s
+
+		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+
+		fmt.Println(sastScan)
+	})
+
+	t.Run("iac report with LowPerQuery disabled", func(t *testing.T) {
+		var iac_status gitComment
+		iacScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "iac")
+		iac_status.Parse(iacScanReportOverview.Findings, &mainconfig)
+		iacTable := iac_status.String()
+
+		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
+		**IAC Results**
+		%s
+
+		`, iacScanReportOverview.Preset, iacTable)
+
+		fmt.Println(iacScan)
+	})
+
+	// remove all findings from report
+	detailedResults["Critical"] = map[string]int{}
+	detailedResults["High"] = map[string]int{}
+	detailedResults["Medium"] = map[string]int{}
+	detailedResults["Low"] = map[string]int{}
+	detailedResults["Information"] = map[string]int{}
+	detailedResults["IACCritical"] = map[string]int{}
+	detailedResults["IACHigh"] = map[string]int{}
+	detailedResults["IACMedium"] = map[string]int{}
+	detailedResults["IACLow"] = map[string]int{}
+	detailedResults["IACInformation"] = map[string]int{}
+	t.Run("sast report with no findings, LowPerQuery disabled", func(t *testing.T) {
+		var sast_status gitComment
+		sastScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "sast")
+		sast_status.Parse(sastScanReportOverview.Findings, &mainconfig)
+		sastTable := sast_status.String()
+
+		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
+		**SAST Scan Preset**: %s
+		**SAST Results**
+		%s
+
+		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+
+		fmt.Println(sastScan)
+	})
+
+	t.Run("iac report with no findings, LowPerQuery disabled", func(t *testing.T) {
+		var iac_status gitComment
+		iacScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "iac")
+		iac_status.Parse(iacScanReportOverview.Findings, &mainconfig)
+		iacTable := iac_status.String()
+
+		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
+		**IAC Results**
+		%s
+
+		`, iacScanReportOverview.Preset, iacTable)
+
+		fmt.Println(iacScan)
+	})
+
+	// add lowPerQuery to config
+	mainconfig.VulnerabilityThresholdLowPerQuery = true
+	// add lowPerQuery data to detailedResults
+	detailedResults["LowPerQuery"] = map[string]map[string]int{}
+	detailedResults["IACLowPerQuery"] = map[string]map[string]int{}
+
+	t.Run("sast report with no findings, LowPerQuery enabled", func(t *testing.T) {
+		var sast_status gitComment
+		sastScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "sast")
+		sast_status.Parse(sastScanReportOverview.Findings, &mainconfig)
+		sastTable := sast_status.String()
+
+		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
+		**SAST Scan Preset**: %s
+		**SAST Results**
+		%s
+
+		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+
+		fmt.Println(sastScan)
+	})
+
+	t.Run("iac report with no findings, LowPerQuery enabled", func(t *testing.T) {
+		var iac_status gitComment
+		iacScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "iac")
+		iac_status.Parse(iacScanReportOverview.Findings, &mainconfig)
+		iacTable := iac_status.String()
+
+		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
+		**IAC Results**
+		%s
+
+		`, iacScanReportOverview.Preset, iacTable)
+
+		fmt.Println(iacScan)
 	})
 }

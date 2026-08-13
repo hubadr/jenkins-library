@@ -835,6 +835,21 @@ func (g *gitComment) Parse(findings *[]checkmarxOne.Finding, config *checkmarxOn
 						g.lowSeverityString = fmt.Sprintf("%s%s %d %s<br>", g.lowSeverityString, g.lowComplianceCheckString, lowFinding.Total-lowFinding.Audited, lowFinding.QueryName)
 					}
 				}
+
+				if g.lowSeverityString == "" { // no findings at all
+					g.lowSeverityString = ":white_check_mark: 0"
+				}
+			} else {
+				if *finding.Audited < int(math.Ceil((float64(config.VulnerabilityThresholdLow)/100.0)*float64(finding.Total))) {
+					g.lowComplianceCheckString = ":x:"
+				} else {
+					g.lowComplianceCheckString = ":white_check_mark:"
+				}
+				if finding.Confirmed > 0 {
+					g.lowSeverityString = fmt.Sprintf("%s %d (%d confirmed)", g.lowComplianceCheckString, finding.Total-*finding.Audited, finding.Confirmed)
+				} else {
+					g.lowSeverityString = fmt.Sprintf("%s %d", g.lowComplianceCheckString, finding.Total-*finding.Audited)
+				}
 			}
 		}
 	}
