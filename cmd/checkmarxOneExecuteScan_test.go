@@ -538,13 +538,25 @@ func TestCheckmarxOneGitComment(t *testing.T) {
 		sastTable := sast_status.String()
 
 		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
-		**SAST Scan Preset**: %s
-		**SAST Results**
-		%s
+**SAST Scan Preset**: %s
+**SAST Results**
+%s
 
-		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
 
-		fmt.Println(sastScan)
+		t.Logf("Generated report: %s", sastScan)
+		expectedReport := `**SAST Scan type**: incremental
+**SAST Scan Preset**: All
+**SAST Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :white_check_mark: 0
+:orange_circle: Medium | :x: 3
+:yellow_circle: Low | :x: 1 Reflected_XSS (0 audited / 1 required) <br>:white_check_mark: 0 Spring_Missing_Content_Security_Policy (1 audited / 1 required) <br>
+
+`
+		assert.Equal(t, expectedReport, sastScan)
 	})
 
 	t.Run("iac report with LowPerQuery enabled", func(t *testing.T) {
@@ -554,12 +566,24 @@ func TestCheckmarxOneGitComment(t *testing.T) {
 		iacTable := iac_status.String()
 
 		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
-		**IAC Results**
-		%s
+**IAC Results**
+%s
 
-		`, iacScanReportOverview.Preset, iacTable)
+`, iacScanReportOverview.Preset, iacTable)
 
-		fmt.Println(iacScan)
+		t.Logf("Generated report: %s", iacScan)
+
+		expectedReport := `**IAC Scan Preset**: all checks
+**IAC Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :x: 1
+:orange_circle: Medium | :white_check_mark: 0
+:yellow_circle: Low | :x: 1 Healthcheck Instruction Missing (0 audited / 1 required) <br>
+
+`
+		assert.Equal(t, expectedReport, iacScan)
 	})
 
 	// remove lowPerQuery from config
@@ -575,13 +599,27 @@ func TestCheckmarxOneGitComment(t *testing.T) {
 		sastTable := sast_status.String()
 
 		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
-		**SAST Scan Preset**: %s
-		**SAST Results**
-		%s
+**SAST Scan Preset**: %s
+**SAST Results**
+%s
 
-		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
 
-		fmt.Println(sastScan)
+		t.Logf("Generated report: %s", sastScan)
+
+		expectedReport := `**SAST Scan type**: incremental
+**SAST Scan Preset**: All
+**SAST Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :white_check_mark: 0
+:orange_circle: Medium | :x: 3
+:yellow_circle: Low | :white_check_mark: 1
+
+`
+
+		assert.Equal(t, expectedReport, sastScan)
 	})
 
 	t.Run("iac report with LowPerQuery disabled", func(t *testing.T) {
@@ -591,12 +629,25 @@ func TestCheckmarxOneGitComment(t *testing.T) {
 		iacTable := iac_status.String()
 
 		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
-		**IAC Results**
-		%s
+**IAC Results**
+%s
 
-		`, iacScanReportOverview.Preset, iacTable)
+`, iacScanReportOverview.Preset, iacTable)
 
-		fmt.Println(iacScan)
+		t.Logf("Generated report: %s", iacScan)
+
+		expectedReport := `**IAC Scan Preset**: all checks
+**IAC Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :x: 1
+:orange_circle: Medium | :white_check_mark: 0
+:yellow_circle: Low | :x: 1
+
+`
+
+		assert.Equal(t, expectedReport, iacScan)
 	})
 
 	// remove all findings from report
@@ -610,35 +661,62 @@ func TestCheckmarxOneGitComment(t *testing.T) {
 	detailedResults["IACMedium"] = map[string]int{}
 	detailedResults["IACLow"] = map[string]int{}
 	detailedResults["IACInformation"] = map[string]int{}
-	t.Run("sast report with no findings, LowPerQuery disabled", func(t *testing.T) {
+	t.Run("sast report with no findings LowPerQuery disabled", func(t *testing.T) {
 		var sast_status gitComment
 		sastScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "sast")
 		sast_status.Parse(sastScanReportOverview.Findings, &mainconfig)
 		sastTable := sast_status.String()
 
 		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
-		**SAST Scan Preset**: %s
-		**SAST Results**
-		%s
+**SAST Scan Preset**: %s
+**SAST Results**
+%s
 
-		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
 
-		fmt.Println(sastScan)
+		t.Logf("Generated report: %s", sastScan)
+
+		expectedReport := `**SAST Scan type**: incremental
+**SAST Scan Preset**: All
+**SAST Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :white_check_mark: 0
+:orange_circle: Medium | :white_check_mark: 0
+:yellow_circle: Low | :white_check_mark: 0
+
+`
+
+		assert.Equal(t, expectedReport, sastScan)
 	})
 
-	t.Run("iac report with no findings, LowPerQuery disabled", func(t *testing.T) {
+	t.Run("iac report with no findings LowPerQuery disabled", func(t *testing.T) {
 		var iac_status gitComment
 		iacScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "iac")
 		iac_status.Parse(iacScanReportOverview.Findings, &mainconfig)
 		iacTable := iac_status.String()
 
 		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
-		**IAC Results**
-		%s
+**IAC Results**
+%s
 
-		`, iacScanReportOverview.Preset, iacTable)
+`, iacScanReportOverview.Preset, iacTable)
 
-		fmt.Println(iacScan)
+		t.Logf("Generated report: %s", iacScan)
+
+		expectedReport := `**IAC Scan Preset**: all checks
+**IAC Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :white_check_mark: 0
+:orange_circle: Medium | :white_check_mark: 0
+:yellow_circle: Low | :white_check_mark: 0
+
+`
+
+		assert.Equal(t, expectedReport, iacScan)
 	})
 
 	// add lowPerQuery to config
@@ -647,34 +725,61 @@ func TestCheckmarxOneGitComment(t *testing.T) {
 	detailedResults["LowPerQuery"] = map[string]map[string]int{}
 	detailedResults["IACLowPerQuery"] = map[string]map[string]int{}
 
-	t.Run("sast report with no findings, LowPerQuery enabled", func(t *testing.T) {
+	t.Run("sast report with no findings LowPerQuery enabled", func(t *testing.T) {
 		var sast_status gitComment
 		sastScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "sast")
 		sast_status.Parse(sastScanReportOverview.Findings, &mainconfig)
 		sastTable := sast_status.String()
 
 		sastScan := fmt.Sprintf(`**SAST Scan type**: %s
-		**SAST Scan Preset**: %s
-		**SAST Results**
-		%s
+**SAST Scan Preset**: %s
+**SAST Results**
+%s
 
-		`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
+`, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
 
-		fmt.Println(sastScan)
+		t.Logf("Generated report: %s", sastScan)
+
+		expectedReport := `**SAST Scan type**: incremental
+**SAST Scan Preset**: All
+**SAST Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :white_check_mark: 0
+:orange_circle: Medium | :white_check_mark: 0
+:yellow_circle: Low | :white_check_mark: 0
+
+`
+
+		assert.Equal(t, expectedReport, sastScan)
 	})
 
-	t.Run("iac report with no findings, LowPerQuery enabled", func(t *testing.T) {
+	t.Run("iac report with no findings LowPerQuery enabled", func(t *testing.T) {
 		var iac_status gitComment
 		iacScanReportOverview := checkmarxOne.CreateJSONHeaderReport(&detailedResults, "iac")
 		iac_status.Parse(iacScanReportOverview.Findings, &mainconfig)
 		iacTable := iac_status.String()
 
 		iacScan := fmt.Sprintf(`**IAC Scan Preset**: %s
-		**IAC Results**
-		%s
+**IAC Results**
+%s
 
-		`, iacScanReportOverview.Preset, iacTable)
+`, iacScanReportOverview.Preset, iacTable)
 
-		fmt.Println(iacScan)
+		t.Logf("Generated report: %s", iacScan)
+
+		expectedReport := `**IAC Scan Preset**: all checks
+**IAC Results**
+Severity | Number of unaudited findings
+--- | ---
+:bangbang: Critical | :white_check_mark: 0
+:red_circle: High | :white_check_mark: 0
+:orange_circle: Medium | :white_check_mark: 0
+:yellow_circle: Low | :white_check_mark: 0
+
+`
+
+		assert.Equal(t, expectedReport, iacScan)
 	})
 }
