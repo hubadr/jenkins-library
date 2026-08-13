@@ -19,6 +19,7 @@ import (
 
 type checkmarxOneSystemMock struct {
 	response interface{}
+	influx   *checkmarxOneExecuteScanInflux
 }
 
 func (sys *checkmarxOneSystemMock) DownloadReport(reportID string) ([]byte, error) {
@@ -474,8 +475,8 @@ func TestCheckmarxOneZipFolder(t *testing.T) {
 	})
 }
 
-func TestCheckmarxOneGitComment(t *testing.T) {
-	detailedResults := map[string]interface{}{
+func testRawDetailedResults() map[string]any {
+	return map[string]interface{}{
 		"Application":                     "80fdd5b7-9269-423e-a483-878ecb3c7ae8",
 		"ApplicationFullPathOnReportDate": "SSBA",
 		"Critical":                        map[string]int{"Issues": 2, "NotExploitable": 2},
@@ -517,6 +518,10 @@ func TestCheckmarxOneGitComment(t *testing.T) {
 		"ScanType":           "Incremental",
 		"ToolVersion":        "CxOne: 3.64.0",
 	}
+}
+
+func TestCheckmarxOneGitComment(t *testing.T) {
+	detailedResults := testRawDetailedResults()
 
 	mainconfig := checkmarxOneExecuteScanOptions{
 		VulnerabilityThresholdEnabled:        true,
@@ -782,4 +787,133 @@ Severity | Number of unaudited findings
 
 		assert.Equal(t, expectedReport, iacScan)
 	})
+}
+
+func TestCheckmarxOneInflux(t *testing.T) {
+	influx := checkmarxOneExecuteScanInflux{}
+	cx1sh := checkmarxOneExecuteScanHelper{
+		influx: &influx,
+	}
+
+	type measurement struct {
+		Name  string
+		Value interface{}
+	}
+	referenceData := []measurement{
+		{Name: "checkmarxOne", Value: false},
+		{Name: "critical_issues", Value: 2},
+		{Name: "critical_not_false_postive", Value: 0},
+		{Name: "critical_not_exploitable", Value: 2},
+		{Name: "critical_confirmed", Value: 0},
+		{Name: "critical_urgent", Value: 0},
+		{Name: "critical_proposed_not_exploitable", Value: 0},
+		{Name: "critical_to_verify", Value: 0},
+		{Name: "high_issues", Value: 2},
+		{Name: "high_not_false_postive", Value: 1},
+		{Name: "high_not_exploitable", Value: 1},
+		{Name: "high_confirmed", Value: 0},
+		{Name: "high_urgent", Value: 0},
+		{Name: "high_proposed_not_exploitable", Value: 0},
+		{Name: "high_to_verify", Value: 1},
+		{Name: "medium_issues", Value: 4},
+		{Name: "medium_not_false_postive", Value: 3},
+		{Name: "medium_not_exploitable", Value: 1},
+		{Name: "medium_confirmed", Value: 0},
+		{Name: "medium_urgent", Value: 0},
+		{Name: "medium_proposed_not_exploitable", Value: 0},
+		{Name: "medium_to_verify", Value: 3},
+		{Name: "low_issues", Value: 3},
+		{Name: "low_not_false_postive", Value: 2},
+		{Name: "low_not_exploitable", Value: 1},
+		{Name: "low_confirmed", Value: 0},
+		{Name: "low_urgent", Value: 0},
+		{Name: "low_proposed_not_exploitable", Value: 0},
+		{Name: "low_to_verify", Value: 2},
+		{Name: "information_issues", Value: 13},
+		{Name: "information_not_false_postive", Value: 12},
+		{Name: "information_not_exploitable", Value: 1},
+		{Name: "information_confirmed", Value: 0},
+		{Name: "information_urgent", Value: 0},
+		{Name: "information_proposed_not_exploitable", Value: 0},
+		{Name: "information_to_verify", Value: 12},
+		{Name: "lines_of_code_scanned", Value: 158},
+		{Name: "files_scanned", Value: 10},
+		{Name: "initiator_name", Value: "michael.kubiaczyk@checkmarx.com"},
+		{Name: "owner", Value: "Cx1 Gap: no project owner"},
+		{Name: "scan_id", Value: "bdff84f5-f226-4591-86e0-f43511474f35"},
+		{Name: "project_id", Value: "ca6bbcca-c75a-4a07-8298-552ec400732a"},
+		{Name: "projectName", Value: "piper-iac-sast-test1"},
+		{Name: "group", Value: ""},
+		{Name: "group_full_path_on_report_date", Value: ""},
+		{Name: "scan_start", Value: "2026-08-05T14:40:31.707039Z"},
+		{Name: "scan_time", Value: "9.299223s"},
+		{Name: "tool_version", Value: "CxOne: 3.64.0, SAST: 9.7.6, IAC: 2.1.20"},
+		{Name: "scan_type", Value: "Incremental"},
+		{Name: "preset", Value: "All"},
+		{Name: "iac_preset", Value: "all checks"},
+		{Name: "deep_link", Value: "test/projects/ca6bbcca-c75a-4a07-8298-552ec400732a/overview?branch=new-branch2"},
+		{Name: "report_creation_time", Value: "2026-08-11 13:38:56.647088 +0200 CEST m=+1.527286701"},
+	}
+
+	detailedResults := testRawDetailedResults()
+	cx1sh.reportToInflux(&detailedResults)
+	measurementContent := []measurement{
+		{Name: "checkmarxOne", Value: influx.step_data.fields.checkmarxOne},
+		{Name: "critical_issues", Value: influx.checkmarxOne_data.fields.critical_issues},
+		{Name: "critical_not_false_postive", Value: influx.checkmarxOne_data.fields.critical_not_false_postive},
+		{Name: "critical_not_exploitable", Value: influx.checkmarxOne_data.fields.critical_not_exploitable},
+		{Name: "critical_confirmed", Value: influx.checkmarxOne_data.fields.critical_confirmed},
+		{Name: "critical_urgent", Value: influx.checkmarxOne_data.fields.critical_urgent},
+		{Name: "critical_proposed_not_exploitable", Value: influx.checkmarxOne_data.fields.critical_proposed_not_exploitable},
+		{Name: "critical_to_verify", Value: influx.checkmarxOne_data.fields.critical_to_verify},
+		{Name: "high_issues", Value: influx.checkmarxOne_data.fields.high_issues},
+		{Name: "high_not_false_postive", Value: influx.checkmarxOne_data.fields.high_not_false_postive},
+		{Name: "high_not_exploitable", Value: influx.checkmarxOne_data.fields.high_not_exploitable},
+		{Name: "high_confirmed", Value: influx.checkmarxOne_data.fields.high_confirmed},
+		{Name: "high_urgent", Value: influx.checkmarxOne_data.fields.high_urgent},
+		{Name: "high_proposed_not_exploitable", Value: influx.checkmarxOne_data.fields.high_proposed_not_exploitable},
+		{Name: "high_to_verify", Value: influx.checkmarxOne_data.fields.high_to_verify},
+		{Name: "medium_issues", Value: influx.checkmarxOne_data.fields.medium_issues},
+		{Name: "medium_not_false_postive", Value: influx.checkmarxOne_data.fields.medium_not_false_postive},
+		{Name: "medium_not_exploitable", Value: influx.checkmarxOne_data.fields.medium_not_exploitable},
+		{Name: "medium_confirmed", Value: influx.checkmarxOne_data.fields.medium_confirmed},
+		{Name: "medium_urgent", Value: influx.checkmarxOne_data.fields.medium_urgent},
+		{Name: "medium_proposed_not_exploitable", Value: influx.checkmarxOne_data.fields.medium_proposed_not_exploitable},
+		{Name: "medium_to_verify", Value: influx.checkmarxOne_data.fields.medium_to_verify},
+		{Name: "low_issues", Value: influx.checkmarxOne_data.fields.low_issues},
+		{Name: "low_not_false_postive", Value: influx.checkmarxOne_data.fields.low_not_false_postive},
+		{Name: "low_not_exploitable", Value: influx.checkmarxOne_data.fields.low_not_exploitable},
+		{Name: "low_confirmed", Value: influx.checkmarxOne_data.fields.low_confirmed},
+		{Name: "low_urgent", Value: influx.checkmarxOne_data.fields.low_urgent},
+		{Name: "low_proposed_not_exploitable", Value: influx.checkmarxOne_data.fields.low_proposed_not_exploitable},
+		{Name: "low_to_verify", Value: influx.checkmarxOne_data.fields.low_to_verify},
+		{Name: "information_issues", Value: influx.checkmarxOne_data.fields.information_issues},
+		{Name: "information_not_false_postive", Value: influx.checkmarxOne_data.fields.information_not_false_postive},
+		{Name: "information_not_exploitable", Value: influx.checkmarxOne_data.fields.information_not_exploitable},
+		{Name: "information_confirmed", Value: influx.checkmarxOne_data.fields.information_confirmed},
+		{Name: "information_urgent", Value: influx.checkmarxOne_data.fields.information_urgent},
+		{Name: "information_proposed_not_exploitable", Value: influx.checkmarxOne_data.fields.information_proposed_not_exploitable},
+		{Name: "information_to_verify", Value: influx.checkmarxOne_data.fields.information_to_verify},
+		{Name: "lines_of_code_scanned", Value: influx.checkmarxOne_data.fields.lines_of_code_scanned},
+		{Name: "files_scanned", Value: influx.checkmarxOne_data.fields.files_scanned},
+		{Name: "initiator_name", Value: influx.checkmarxOne_data.fields.initiator_name},
+		{Name: "owner", Value: influx.checkmarxOne_data.fields.owner},
+		{Name: "scan_id", Value: influx.checkmarxOne_data.fields.scan_id},
+		{Name: "project_id", Value: influx.checkmarxOne_data.fields.project_id},
+		{Name: "projectName", Value: influx.checkmarxOne_data.fields.projectName},
+		{Name: "group", Value: influx.checkmarxOne_data.fields.group},
+		{Name: "group_full_path_on_report_date", Value: influx.checkmarxOne_data.fields.group_full_path_on_report_date},
+		{Name: "scan_start", Value: influx.checkmarxOne_data.fields.scan_start},
+		{Name: "scan_time", Value: influx.checkmarxOne_data.fields.scan_time},
+		{Name: "tool_version", Value: influx.checkmarxOne_data.fields.tool_version},
+		{Name: "scan_type", Value: influx.checkmarxOne_data.fields.scan_type},
+		{Name: "preset", Value: influx.checkmarxOne_data.fields.preset},
+		{Name: "iac_preset", Value: influx.checkmarxOne_data.fields.iac_preset},
+		{Name: "deep_link", Value: influx.checkmarxOne_data.fields.deep_link},
+		{Name: "report_creation_time", Value: influx.checkmarxOne_data.fields.report_creation_time},
+	}
+
+	data, _ := json.Marshal(measurementContent)
+	reference, _ := json.Marshal(referenceData)
+	assert.Equal(t, reference, data)
 }
