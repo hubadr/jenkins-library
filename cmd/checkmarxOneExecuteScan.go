@@ -892,6 +892,7 @@ func (c *checkmarxOneExecuteScanHelper) PostScanSummaryInPullRequest(detailedRes
 **SAST Scan Preset**: %s
 **SAST Results**
 %s
+
 `, strings.ToLower(sastScanReportOverview.ScanType), sastScanReportOverview.Preset, sastTable)
 
 		}
@@ -907,6 +908,7 @@ func (c *checkmarxOneExecuteScanHelper) PostScanSummaryInPullRequest(detailedRes
 			iacScan = fmt.Sprintf(`**IAC Preset**: %s
 **IAC Results**
 %s
+
 `, iacScanReportOverview.Preset, iacTable)
 		}
 		var scanIcon string
