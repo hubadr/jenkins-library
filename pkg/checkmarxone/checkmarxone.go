@@ -229,12 +229,11 @@ type ScanResult struct {
 type maybeStringInt int
 
 type ScanResultDetails struct {
-	CweId       maybeStringInt // empty for kics results, pending case 283343
+	CweId       maybeStringInt
 	Compliances []string
 }
 
 type IACFindingInfo struct {
-	Cwe int
 	URL string
 }
 
@@ -1248,7 +1247,6 @@ func (sys *SystemInstance) GetIACQueryFamily(family string) (map[string]IACFindi
 			for i := range group.Children {
 				query := &group.Children[i]
 				iacFindings[query.Key] = IACFindingInfo{
-					Cwe: query.Data.Cwe,
 					URL: query.Data.URL,
 				}
 			}
