@@ -289,8 +289,6 @@ func TestGetIACFindingInfo(t *testing.T) {
 
 		info, err := sys.GetIACFindingInfo(result)
 		assert.NoError(t, err, "Error occurred but none expected")
-
-		assert.Equal(t, 710, info.Cwe, "CWE is incorrect")
 		assert.Equal(t, "https://docs.kics.io/2.1.20/queries/dockerfile-queries/b03a748a-542d-44f4-bb86-9199ab4fd2d5", info.URL, "URL is incorrect")
 	})
 

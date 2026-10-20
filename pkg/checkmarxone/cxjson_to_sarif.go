@@ -56,8 +56,6 @@ func convertCxJSONToSarif(sys System, resultType, baseURL, projectBaseURL string
 			continue
 		}
 
-		// Pending case 283343, the CweID for a KICS finding is not provided by the API.
-		// However, we need the IACFindingInfo struct data from another source, which also includes CWE
 		var iacFindingInfo *IACFindingInfo
 		if r.Type == "kics" {
 			findingInfo, err := sys.GetIACFindingInfo(r)
@@ -65,7 +63,6 @@ func convertCxJSONToSarif(sys System, resultType, baseURL, projectBaseURL string
 				log.Entry().Warningf("Error while retrieving IAC finding description for finding [%s] %s: %s", r.Data.QueryID, r.Data.QueryName, err)
 			} else {
 				iacFindingInfo = &findingInfo
-				r.VulnerabilityDetails.CweId = maybeStringInt(iacFindingInfo.Cwe)
 			}
 		}
 		_, haskey := cweIdsForTaxonomies[int(r.VulnerabilityDetails.CweId)]
